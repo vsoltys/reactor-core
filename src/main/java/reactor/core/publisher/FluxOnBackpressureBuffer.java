@@ -26,11 +26,12 @@ import org.reactivestreams.Subscription;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable;
 import reactor.util.concurrent.QueueSupplier;
+import reactor.util.context.Context;
 
 /**
  * @author Stephane Maldini
  */
-final class FluxOnBackpressureBuffer<O> extends FluxSource<O, O> implements Fuseable {
+final class FluxOnBackpressureBuffer<O> extends FluxOperator<O, O> implements Fuseable {
 
 	final Consumer<? super O> onOverflow;
 	final int                 bufferSize;
@@ -52,12 +53,12 @@ final class FluxOnBackpressureBuffer<O> extends FluxSource<O, O> implements Fuse
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super O> s) {
+	public void subscribe(Subscriber<? super O> s, Context ctx) {
 		source.subscribe(new BackpressureBufferSubscriber<>(s,
 				bufferSize,
 				unbounded,
 				delayError,
-				onOverflow));
+				onOverflow), ctx);
 	}
 
 	@Override

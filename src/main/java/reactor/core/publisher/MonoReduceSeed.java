@@ -23,6 +23,7 @@ import java.util.function.Supplier;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Fuseable;
+import reactor.util.context.Context;
 
 /**
  * Aggregates the source values with the help of an accumulator
@@ -33,7 +34,7 @@ import reactor.core.Fuseable;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class MonoReduceSeed<T, R> extends MonoSource<T, R> implements Fuseable {
+final class MonoReduceSeed<T, R> extends MonoOperator<T, R> implements Fuseable {
 
 	final Supplier<R> initialSupplier;
 
@@ -48,7 +49,7 @@ final class MonoReduceSeed<T, R> extends MonoSource<T, R> implements Fuseable {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super R> s) {
+	public void subscribe(Subscriber<? super R> s, Context ctx) {
 		R initialValue;
 
 		try {
@@ -60,7 +61,7 @@ final class MonoReduceSeed<T, R> extends MonoSource<T, R> implements Fuseable {
 			return;
 		}
 
-		source.subscribe(new ReduceSeedSubscriber<>(s, accumulator, initialValue));
+		source.subscribe(new ReduceSeedSubscriber<>(s, accumulator, initialValue), ctx);
 	}
 
 	static final class ReduceSeedSubscriber<T, R> extends Operators.MonoSubscriber<T, R>  {

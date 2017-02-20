@@ -26,7 +26,7 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Fuseable;
 import reactor.core.Scannable;
-
+import reactor.util.context.Context;
 
 /**
  * Concatenates a several Mono sources with a final Mono source by
@@ -47,8 +47,8 @@ final class MonoThenIgnore<T> extends Mono<T> implements Fuseable {
     }
     
     @Override
-    public void subscribe(Subscriber<? super T> s) {
-        ThenIgnoreMain<T> manager = new ThenIgnoreMain<>(s, ignore, last);
+    public void subscribe(Subscriber<? super T> s, Context ctx) {
+        ThenIgnoreMain<T> manager = new ThenIgnoreMain<>(s, ignore, last, ctx);
         s.onSubscribe(manager);
         
         manager.drain();
@@ -79,6 +79,8 @@ final class MonoThenIgnore<T> extends Mono<T> implements Fuseable {
         
         final Mono<?>[] ignoreMonos;
 
+        final Context context;
+
         final Mono<T> lastMono;
 
         int index;
@@ -91,13 +93,13 @@ final class MonoThenIgnore<T> extends Mono<T> implements Fuseable {
                 AtomicIntegerFieldUpdater.newUpdater(ThenIgnoreMain.class, "wip");
         
         ThenIgnoreMain(Subscriber<? super T> subscriber,
-		        Mono<?>[] ignoreMonos, Mono<T> lastMono) {
+		        Mono<?>[] ignoreMonos, Mono<T> lastMono, Context context) {
             super(subscriber);
             this.ignoreMonos = ignoreMonos;
             this.lastMono = lastMono;
             this.ignore = new ThenIgnoreInner(this);
             this.accept = new ThenAcceptInner<>(this);
-
+            this.context = context;
         }
 
 	    @Override
@@ -206,13 +208,18 @@ final class MonoThenIgnore<T> extends Mono<T> implements Fuseable {
 		    }
 		    return null;
 	    }
-        
+
         @Override
         public void onSubscribe(Subscription s) {
             if (Operators.replace(S, this, s)) {
                 s.request(Long.MAX_VALUE);
             }
         }
+
+	    @Override
+	    public Context currentContext() {
+		    return parent.context;
+	    }
 
         @Override
         public void onNext(Object t) {
@@ -265,6 +272,11 @@ final class MonoThenIgnore<T> extends Mono<T> implements Fuseable {
 	            	return s == Operators.cancelledSubscription();
             }
             return null;
+        }
+
+        @Override
+        public Context currentContext() {
+            return parent.context;
         }
 
         @Override

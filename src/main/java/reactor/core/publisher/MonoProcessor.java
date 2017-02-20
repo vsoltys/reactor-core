@@ -31,6 +31,7 @@ import reactor.core.Disposable;
 import reactor.core.Exceptions;
 import reactor.core.Scannable;
 import reactor.util.concurrent.WaitStrategy;
+import reactor.util.context.Context;
 
 /**
  * A {@code MonoProcessor} is a {@link Mono} extension that implements stateful semantics. Multi-subscribe is allowed.
@@ -73,8 +74,8 @@ public final class MonoProcessor<O> extends Mono<O>
 		return new MonoProcessor<>(null, waitStrategy);
 	}
 
-	final Publisher<? extends O> source;
-	final WaitStrategy           waitStrategy;
+	final ContextualPublisher<? extends O> source;
+	final WaitStrategy waitStrategy;
 
 	Subscription subscription;
 	volatile Processor<O, O> processor;
@@ -85,11 +86,11 @@ public final class MonoProcessor<O> extends Mono<O>
 	volatile int             requested;
 	volatile int             connected;
 
-	MonoProcessor(Publisher<? extends O> source) {
+	MonoProcessor(ContextualPublisher<? extends O> source) {
 		this(source, WaitStrategy.sleeping());
 	}
 
-	MonoProcessor(Publisher<? extends O> source, WaitStrategy waitStrategy) {
+	MonoProcessor(ContextualPublisher<? extends O> source, WaitStrategy waitStrategy) {
 		this.source = source;
 		this.waitStrategy = Objects.requireNonNull(waitStrategy, "waitStrategy");
 	}
@@ -369,7 +370,7 @@ public final class MonoProcessor<O> extends Mono<O>
 	}
 
 	@Override
-	public void subscribe(final Subscriber<? super O> subscriber) {
+	public void subscribe(final Subscriber<? super O> subscriber, Context ctx) {
 		for (; ; ) {
 			int endState = this.state;
 			if (endState == STATE_COMPLETE_NO_VALUE) {

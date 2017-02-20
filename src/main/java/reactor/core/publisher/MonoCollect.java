@@ -23,6 +23,7 @@ import java.util.function.Supplier;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Fuseable;
+import reactor.util.context.Context;
 
 /**
  * Collects the values of the source sequence into a container returned by
@@ -34,7 +35,7 @@ import reactor.core.Fuseable;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class MonoCollect<T, R> extends MonoSource<T, R> implements Fuseable {
+final class MonoCollect<T, R> extends MonoOperator<T, R> implements Fuseable {
 
 	final Supplier<R> supplier;
 
@@ -49,7 +50,7 @@ final class MonoCollect<T, R> extends MonoSource<T, R> implements Fuseable {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super R> s) {
+	public void subscribe(Subscriber<? super R> s, Context ctx) {
 		R container;
 
 		try {
@@ -61,7 +62,7 @@ final class MonoCollect<T, R> extends MonoSource<T, R> implements Fuseable {
 			return;
 		}
 
-		source.subscribe(new CollectSubscriber<>(s, action, container));
+		source.subscribe(new CollectSubscriber<>(s, action, container), ctx);
 	}
 
 	static final class CollectSubscriber<T, R> extends Operators.MonoSubscriber<T, R>  {

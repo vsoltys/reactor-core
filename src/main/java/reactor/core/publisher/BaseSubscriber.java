@@ -20,8 +20,10 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import reactor.util.context.ContextRelay;
 import reactor.core.Disposable;
 import reactor.core.Exceptions;
+import reactor.util.context.Context;
 
 /**
  * A simple base class for a {@link Subscriber} implementation that lets the user
@@ -42,7 +44,7 @@ import reactor.core.Exceptions;
  * @author Simon Baslé
  */
 public abstract class BaseSubscriber<T> implements Subscriber<T>, Subscription,
-                                                   Disposable {
+                                                   Disposable, ContextRelay {
 
 	volatile Subscription subscription;
 
@@ -55,6 +57,11 @@ public abstract class BaseSubscriber<T> implements Subscriber<T>, Subscription,
 	 */
 	protected Subscription upstream() {
 		return subscription;
+	}
+
+	@Override
+	public final void onContext(Context context) {
+		hookOnContext(context);
 	}
 
 	@Override
@@ -100,6 +107,13 @@ public abstract class BaseSubscriber<T> implements Subscriber<T>, Subscription,
 	 * Optional hook for completion processing. Defaults to doing nothing.
 	 */
 	protected void hookOnComplete() {
+		// NO-OP
+	}
+
+	/**
+	 * Optional hook for context handling. Defaults to doing nothing.
+	 */
+	protected void hookOnContext(Context context) {
 		// NO-OP
 	}
 

@@ -25,7 +25,7 @@ import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Scannable;
-
+import reactor.util.context.Context;
 
 /**
  * Given a set of source Publishers the values of that Publisher is forwarded to the
@@ -54,7 +54,7 @@ final class FluxFirstEmitting<T> extends Flux<T> {
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
 		Publisher<? extends T>[] a = array;
 		int n;
 		if (a == null) {
@@ -129,7 +129,7 @@ final class FluxFirstEmitting<T> extends Flux<T> {
 			return;
 		}
 
-		RaceCoordinator<T> coordinator = new RaceCoordinator<>(n);
+		RaceCoordinator<T> coordinator = new RaceCoordinator<>(n, ctx);
 
 		coordinator.subscribe(a, n, s);
 	}
@@ -162,6 +162,8 @@ final class FluxFirstEmitting<T> extends Flux<T> {
 
 		final FirstEmittingSubscriber<T>[] subscribers;
 
+		final Context context;
+
 		volatile boolean cancelled;
 
 		volatile int wip;
@@ -170,9 +172,10 @@ final class FluxFirstEmitting<T> extends Flux<T> {
 				AtomicIntegerFieldUpdater.newUpdater(RaceCoordinator.class, "wip");
 
 		@SuppressWarnings("unchecked")
-		RaceCoordinator(int n) {
+		RaceCoordinator(int n, Context ctx) {
 			subscribers = new FirstEmittingSubscriber[n];
 			wip = Integer.MIN_VALUE;
+			context = ctx;
 		}
 
 		@Override
@@ -289,6 +292,16 @@ final class FluxFirstEmitting<T> extends Flux<T> {
 			this.actual = actual;
 			this.parent = parent;
 			this.index = index;
+		}
+
+		@Override
+		public void onContext(Context context) {
+			//IGNORE ambiguous context
+		}
+
+		@Override
+		public Context currentContext() {
+			return parent.context;
 		}
 
 		@Override

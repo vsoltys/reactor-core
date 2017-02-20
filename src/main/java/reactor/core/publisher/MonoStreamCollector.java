@@ -24,6 +24,7 @@ import java.util.stream.Collector;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Fuseable;
+import reactor.util.context.Context;
 
 /**
  * Collects the values from the source sequence into a {@link java.util.stream.Collector}
@@ -35,7 +36,7 @@ import reactor.core.Fuseable;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class MonoStreamCollector<T, A, R> extends MonoSource<T, R> implements Fuseable {
+final class MonoStreamCollector<T, A, R> extends MonoOperator<T, R> implements Fuseable {
 
 	final Collector<? super T, A, ? extends R> collector;
 
@@ -46,7 +47,7 @@ final class MonoStreamCollector<T, A, R> extends MonoSource<T, R> implements Fus
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super R> s) {
+	public void subscribe(Subscriber<? super R> s, Context ctx) {
 		A container;
 		BiConsumer<? super A, ? super T> accumulator;
 		Function<? super A, ? extends R> finisher;
@@ -67,7 +68,7 @@ final class MonoStreamCollector<T, A, R> extends MonoSource<T, R> implements Fus
 		source.subscribe(new StreamCollectorSubscriber<>(s,
 				container,
 				accumulator,
-				finisher));
+				finisher), ctx);
 	}
 
 	static final class StreamCollectorSubscriber<T, A, R>

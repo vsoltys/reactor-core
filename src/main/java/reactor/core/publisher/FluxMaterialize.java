@@ -23,19 +23,20 @@ import java.util.function.BooleanSupplier;
 
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import reactor.util.context.Context;
 
 /**
  * @author Stephane Maldini
  */
-final class FluxMaterialize<T> extends FluxSource<T, Signal<T>> {
+final class FluxMaterialize<T> extends FluxOperator<T, Signal<T>> {
 
 	FluxMaterialize(Flux<T> source) {
 		super(source);
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super Signal<T>> subscriber) {
-		source.subscribe(new MaterializeSubscriber<T>(subscriber));
+	public void subscribe(Subscriber<? super Signal<T>> subscriber, Context ctx) {
+		source.subscribe(new MaterializeSubscriber<T>(subscriber), ctx);
 	}
 
 	final static class MaterializeSubscriber<T>

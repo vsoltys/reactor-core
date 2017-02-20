@@ -27,7 +27,7 @@ import org.reactivestreams.Subscription;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable;
 import reactor.core.Scannable;
-
+import reactor.util.context.Context;
 
 /**
  * Dispatches the values from upstream in a round robin fashion to subscribers which are
@@ -36,7 +36,7 @@ import reactor.core.Scannable;
  * @param <T> the value type
  */
 final class ParallelSource<T> extends ParallelFlux<T> implements Scannable {
-	final Publisher<? extends T> source;
+	final ContextualPublisher<? extends T> source;
 	
 	final int parallelism;
 	
@@ -51,7 +51,7 @@ final class ParallelSource<T> extends ParallelFlux<T> implements Scannable {
 		if (prefetch <= 0) {
 			throw new IllegalArgumentException("prefetch > 0 required but it was " + prefetch);
 		}
-		this.source = source;
+		this.source = Operators.contextual(source);
 		this.parallelism = parallelism;
 		this.prefetch = prefetch;
 		this.queueSupplier = queueSupplier;
@@ -77,14 +77,14 @@ final class ParallelSource<T> extends ParallelFlux<T> implements Scannable {
 		}
 		return null;
 	}
-	
+
 	@Override
-	public void subscribe(Subscriber<? super T>[] subscribers) {
+	public void subscribe(Subscriber<? super T>[] subscribers, Context ctx) {
 		if (!validate(subscribers)) {
 			return;
 		}
 		
-		source.subscribe(new ParallelSourceMain<>(subscribers, prefetch, queueSupplier));
+		source.subscribe(new ParallelSourceMain<>(ctx, subscribers, prefetch, queueSupplier), ctx);
 	}
 	
 	static final class ParallelSourceMain<T> implements InnerConsumer<T> {
@@ -100,6 +100,8 @@ final class ParallelSource<T> extends ParallelFlux<T> implements Scannable {
 		final int limit;
 
 		final Supplier<Queue<T>> queueSupplier;
+
+		final Context context;
 
 		Subscription s;
 		
@@ -131,7 +133,7 @@ final class ParallelSource<T> extends ParallelFlux<T> implements Scannable {
 		
 		int sourceMode;
 
-		ParallelSourceMain(Subscriber<? super T>[] subscribers, int
+		ParallelSourceMain(Context context, Subscriber<? super T>[] subscribers, int
 				prefetch,
 				Supplier<Queue<T>> queueSupplier) {
 			this.subscribers = subscribers;
@@ -140,6 +142,7 @@ final class ParallelSource<T> extends ParallelFlux<T> implements Scannable {
 			this.limit = prefetch - (prefetch >> 2);
 			this.requests = new AtomicLongArray(subscribers.length);
 			this.emissions = new long[subscribers.length];
+			this.context = context;
 		}
 
 		@Override
@@ -164,6 +167,11 @@ final class ParallelSource<T> extends ParallelFlux<T> implements Scannable {
 		@Override
 		public Stream<? extends Scannable> inners() {
 			return Stream.of(subscribers).map(Scannable::from);
+		}
+
+		@Override
+		public Context currentContext() {
+			return context;
 		}
 
 		@Override

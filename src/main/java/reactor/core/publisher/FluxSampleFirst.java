@@ -28,7 +28,7 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Exceptions;
 import reactor.core.Scannable;
-
+import reactor.util.context.Context;
 
 /**
  * Takes a value from upstream then uses the duration provided by a
@@ -40,7 +40,7 @@ import reactor.core.Scannable;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxSampleFirst<T, U> extends FluxSource<T, T> {
+final class FluxSampleFirst<T, U> extends FluxOperator<T, T> {
 
 	final Function<? super T, ? extends Publisher<U>> throttler;
 
@@ -51,12 +51,12 @@ final class FluxSampleFirst<T, U> extends FluxSource<T, T> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
 		SampleFirstMain<T, U> main = new SampleFirstMain<>(s, throttler);
 
 		s.onSubscribe(main);
 
-		source.subscribe(main);
+		source.subscribe(main, ctx);
 	}
 
 	@Override
@@ -64,20 +64,14 @@ final class FluxSampleFirst<T, U> extends FluxSource<T, T> {
 		return Integer.MAX_VALUE;
 	}
 
-	static final class SampleFirstMain<T, U>
+	static final class SampleFirstMain<T, U> extends CachedContextProducer<T>
 			implements InnerOperator<T, T> {
 
 		final Function<? super T, ? extends Publisher<U>> throttler;
-		final Subscriber<? super T>                       actual;
 
 		volatile boolean gate;
 
 		volatile Subscription s;
-
-		@Override
-		public final Subscriber<? super T> actual() {
-			return actual;
-		}
 
 		@SuppressWarnings("rawtypes")
 		static final AtomicReferenceFieldUpdater<SampleFirstMain, Subscription> S =
@@ -111,7 +105,7 @@ final class FluxSampleFirst<T, U> extends FluxSource<T, T> {
 
 		SampleFirstMain(Subscriber<? super T> actual,
 				Function<? super T, ? extends Publisher<U>> throttler) {
-			this.actual = actual;
+			super(actual);
 			this.throttler = throttler;
 		}
 
@@ -246,6 +240,11 @@ final class FluxSampleFirst<T, U> extends FluxSource<T, T> {
 
 		SampleFirstOther(SampleFirstMain<?, U> main) {
 			this.main = main;
+		}
+
+		@Override
+		public Context currentContext() {
+			return main.currentContext();
 		}
 
 		@Override

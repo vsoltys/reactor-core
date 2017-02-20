@@ -26,7 +26,7 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Exceptions;
 import reactor.core.Scannable;
-
+import reactor.util.context.Context;
 
 /**
  * Merges the individual 'rails' of the source ParallelFlux, unordered,
@@ -58,28 +58,21 @@ final class ParallelMergeSequential<T> extends Flux<T> implements Scannable {
 		}
 		return null;
 	}
-	
+
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
-		MergeSequentialMain<T> parent = new MergeSequentialMain<>(s, source
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
+		MergeSequentialMain<T> parent = new MergeSequentialMain<>(ctx, s, source
 				.parallelism(), prefetch, queueSupplier);
 		s.onSubscribe(parent);
-		source.subscribe(parent.subscribers);
+		source.subscribe(parent.subscribers, ctx);
 	}
 	
-	static final class MergeSequentialMain<T>
-			implements InnerProducer<T> {
+	static final class MergeSequentialMain<T> extends CachedContextProducer<T> {
 		final MergeSequentialInner<T>[] subscribers;
 		
 		final Supplier<Queue<T>>    queueSupplier;
-		final Subscriber<? super T> actual;
 
 		volatile Throwable error;
-
-		@Override
-		public final Subscriber<? super T> actual() {
-			return actual;
-		}
 
 		@SuppressWarnings("rawtypes")
 		static final AtomicReferenceFieldUpdater<MergeSequentialMain, Throwable> ERROR =
@@ -102,10 +95,11 @@ final class ParallelMergeSequential<T> extends Flux<T> implements Scannable {
 		static final AtomicIntegerFieldUpdater<MergeSequentialMain> DONE =
 				AtomicIntegerFieldUpdater.newUpdater(MergeSequentialMain.class, "done");
 
-		MergeSequentialMain(Subscriber<? super T> actual, int n, int
+		MergeSequentialMain(Context ctx, Subscriber<? super T> actual, int n, int
 				prefetch,
 				Supplier<Queue<T>> queueSupplier) {
-			this.actual = actual;
+			super(actual);
+			this.context = ctx;
 			this.queueSupplier = queueSupplier;
 			@SuppressWarnings("unchecked")
 			MergeSequentialInner<T>[] a = new MergeSequentialInner[n];
@@ -130,7 +124,7 @@ final class ParallelMergeSequential<T> extends Flux<T> implements Scannable {
 				case ERROR:
 					return error;
 			}
-			return InnerProducer.super.scan(key);
+			return super.scan(key);
 		}
 
 		@Override
@@ -382,7 +376,12 @@ final class ParallelMergeSequential<T> extends Flux<T> implements Scannable {
 			}
 			return null;
 		}
-		
+
+		@Override
+		public Context currentContext() {
+			return parent.currentContext();
+		}
+
 		@Override
 		public void onSubscribe(Subscription s) {
 			if (Operators.setOnce(S, this, s)) {

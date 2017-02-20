@@ -32,8 +32,8 @@ import org.reactivestreams.Subscription;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable;
 import reactor.core.Scannable;
-
-
+import reactor.util.context.Context;
+import reactor.util.context.ContextRelay;
 
 /**
  * Groups upstream items into their own Publisher sequence based on a key selector.
@@ -44,7 +44,7 @@ import reactor.core.Scannable;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxGroupBy<T, K, V> extends FluxSource<T, GroupedFlux<K, V>>
+final class FluxGroupBy<T, K, V> extends FluxOperator<T, GroupedFlux<K, V>>
 		implements Fuseable {
 
 	final Function<? super T, ? extends K> keySelector;
@@ -77,13 +77,13 @@ final class FluxGroupBy<T, K, V> extends FluxSource<T, GroupedFlux<K, V>>
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super GroupedFlux<K, V>> s) {
+	public void subscribe(Subscriber<? super GroupedFlux<K, V>> s, Context ctx) {
 		source.subscribe(new GroupByMain<>(s,
 				mainQueueSupplier.get(),
 				groupQueueSupplier,
 				prefetch,
 				keySelector,
-				valueSelector));
+				valueSelector), ctx);
 	}
 
 	@Override
@@ -92,8 +92,9 @@ final class FluxGroupBy<T, K, V> extends FluxSource<T, GroupedFlux<K, V>>
 	}
 
 	static final class GroupByMain<T, K, V>
+			extends CachedContextProducer<GroupedFlux<K, V>>
 			implements QueueSubscription<GroupedFlux<K, V>>,
-			           InnerOperator<T, GroupedFlux<K, V>>, InnerProducer<GroupedFlux<K,V>> {
+			           InnerOperator<T, GroupedFlux<K, V>> {
 
 		final Function<? super T, ? extends K> keySelector;
 
@@ -107,14 +108,7 @@ final class FluxGroupBy<T, K, V> extends FluxSource<T, GroupedFlux<K, V>>
 
 		final ConcurrentMap<K, UnicastGroupedFlux<K, V>> groupMap;
 
-		final Subscriber<? super GroupedFlux<K, V>>      actual;
-
 		volatile int wip;
-
-		@Override
-		public final Subscriber<? super GroupedFlux<K, V>> actual() {
-			return actual;
-		}
 
 		@SuppressWarnings("rawtypes")
 		static final AtomicIntegerFieldUpdater<GroupByMain> WIP =
@@ -153,7 +147,7 @@ final class FluxGroupBy<T, K, V> extends FluxSource<T, GroupedFlux<K, V>>
 				int prefetch,
 				Function<? super T, ? extends K> keySelector,
 				Function<? super T, ? extends V> valueSelector) {
-			this.actual = actual;
+			super(actual);
 			this.queue = queue;
 			this.groupQueueSupplier = groupQueueSupplier;
 			this.prefetch = prefetch;
@@ -477,6 +471,8 @@ final class FluxGroupBy<T, K, V> extends FluxSource<T, GroupedFlux<K, V>>
 
 		final int limit;
 
+		final Context context;
+
 		@Override
 		public K key() {
 			return key;
@@ -528,6 +524,7 @@ final class FluxGroupBy<T, K, V> extends FluxSource<T, GroupedFlux<K, V>>
 				int prefetch) {
 			this.key = key;
 			this.queue = queue;
+			this.context = parent.currentContext();
 			this.parent = parent;
 			this.limit = prefetch - (prefetch >> 2);
 		}
@@ -700,8 +697,9 @@ final class FluxGroupBy<T, K, V> extends FluxSource<T, GroupedFlux<K, V>>
 		}
 
 		@Override
-		public void subscribe(Subscriber<? super V> s) {
+		public void subscribe(Subscriber<? super V> s, Context context) {
 			if (once == 0 && ONCE.compareAndSet(this, 0, 1)) {
+				ContextRelay.set(s, context);
 				s.onSubscribe(this);
 				ACTUAL.lazySet(this, s);
 				drain();

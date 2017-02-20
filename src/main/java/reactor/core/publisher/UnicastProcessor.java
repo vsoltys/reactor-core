@@ -28,6 +28,7 @@ import reactor.core.Disposable;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable;
 import reactor.util.concurrent.QueueSupplier;
+import reactor.util.context.Context;
 
 /**
  * A Processor implementation that takes a custom queue and allows
@@ -351,7 +352,7 @@ public final class UnicastProcessor<T>
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
 		if (s == null) {
 			throw Exceptions.argumentIsNullException();
 		}

@@ -21,7 +21,7 @@ package reactor.core.publisher;
  */
 public enum SignalType {
 	SUBSCRIBE, REQUEST, CANCEL, ON_SUBSCRIBE, ON_NEXT, ON_ERROR, ON_COMPLETE,
-	AFTER_TERMINATE;
+	AFTER_TERMINATE, CURRENT_CONTEXT, ON_CONTEXT;
 
 	@Override
 	public String toString() {
@@ -38,6 +38,10 @@ public enum SignalType {
 				return "request";
 			case CANCEL:
 				return "cancel";
+			case CURRENT_CONTEXT:
+				return "parent";
+			case ON_CONTEXT:
+				return "onContext";
 			case AFTER_TERMINATE:
 				return "afterTerminate";
 			default:

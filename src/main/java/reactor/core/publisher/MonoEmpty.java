@@ -20,7 +20,7 @@ import java.time.Duration;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import reactor.core.Fuseable;
-
+import reactor.util.context.Context;
 
 /**
  * Represents an empty publisher which only calls onSubscribe and onComplete.
@@ -41,7 +41,7 @@ extends Mono<Object>
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super Object> s) {
+	public void subscribe(Subscriber<? super Object> s, Context context) {
 		Operators.complete(s);
 	}
 

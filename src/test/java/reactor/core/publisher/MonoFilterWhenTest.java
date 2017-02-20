@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *        http://www.apache.org/licenses/LICENSE-2.0
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -27,6 +27,7 @@ import org.reactivestreams.Subscription;
 import reactor.core.Scannable;
 import reactor.test.StepVerifier;
 import reactor.test.publisher.TestPublisher;
+import reactor.util.context.Context;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -294,7 +295,7 @@ public class MonoFilterWhenTest {
 		TestPublisher<Boolean> filter = TestPublisher.create();
 		new MonoFilterWhen(new Mono() {
 			@Override
-			public void subscribe(Subscriber s) {
+			public void subscribe(Subscriber s, Context ctx) {
 				subscriber.set(s);
 				//NON-EMPTY SOURCE WILL TRIGGER FILTER SUBSCRIPTION
 				s.onNext(2);

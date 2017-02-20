@@ -25,8 +25,8 @@ import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Scannable;
-
-
+import reactor.util.context.Context;
+import reactor.util.context.ContextRelay;
 
 /**
  * Repeats a source when a companion sequence signals an item in response to the main's
@@ -40,11 +40,11 @@ import reactor.core.Scannable;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxRepeatWhen<T> extends FluxSource<T, T> {
+final class FluxRepeatWhen<T> extends FluxOperator<T, T> {
 
 	final Function<? super Flux<Long>, ? extends Publisher<?>> whenSourceFactory;
 
-	FluxRepeatWhen(Publisher<? extends T> source,
+	FluxRepeatWhen(ContextualPublisher<? extends T> source,
 			Function<? super Flux<Long>, ? extends Publisher<?>> whenSourceFactory) {
 		super(source);
 		this.whenSourceFactory =
@@ -52,7 +52,7 @@ final class FluxRepeatWhen<T> extends FluxSource<T, T> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
 
 		RepeatWhenOtherSubscriber other = new RepeatWhenOtherSubscriber();
 		Subscriber<Long> signaller = Operators.serialize(other.completionSignal);
@@ -62,7 +62,7 @@ final class FluxRepeatWhen<T> extends FluxSource<T, T> {
 		Subscriber<T> serial = Operators.serialize(s);
 
 		RepeatWhenMainSubscriber<T> main =
-				new RepeatWhenMainSubscriber<>(serial, signaller, source);
+				new RepeatWhenMainSubscriber<>(serial, signaller, source, ctx);
 		other.main = main;
 
 		serial.onSubscribe(main);
@@ -81,7 +81,7 @@ final class FluxRepeatWhen<T> extends FluxSource<T, T> {
 		p.subscribe(other);
 
 		if (!main.cancelled) {
-			source.subscribe(main);
+			source.subscribe(main, ctx);
 		}
 	}
 
@@ -106,8 +106,8 @@ final class FluxRepeatWhen<T> extends FluxSource<T, T> {
 
 		RepeatWhenMainSubscriber(Subscriber<? super T> actual,
 				Subscriber<Long> signaller,
-				Publisher<? extends T> source) {
-			super(actual);
+				Publisher<? extends T> source, Context ctx) {
+			super(actual, ctx);
 			this.signaller = signaller;
 			this.source = source;
 			this.otherArbiter = new Operators.DeferredSubscription();
@@ -209,6 +209,11 @@ final class FluxRepeatWhen<T> extends FluxSource<T, T> {
 		final DirectProcessor<Long> completionSignal = new DirectProcessor<>();
 
 		@Override
+		public Context currentContext() {
+			return main.context;
+		}
+
+		@Override
 		public Object scan(Attr key) {
 			switch (key){
 				case PARENT:
@@ -240,7 +245,8 @@ final class FluxRepeatWhen<T> extends FluxSource<T, T> {
 		}
 
 		@Override
-		public void subscribe(Subscriber<? super Long> s) {
+		public void subscribe(Subscriber<? super Long> s, Context ctx) {
+			ContextRelay.set(s, main.context);
 			completionSignal.subscribe(s);
 		}
 

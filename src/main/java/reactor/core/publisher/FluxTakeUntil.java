@@ -20,6 +20,7 @@ import java.util.function.Predicate;
 
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import reactor.util.context.Context;
 
 /**
  * Relays values until a predicate returns
@@ -29,7 +30,7 @@ import org.reactivestreams.Subscription;
  * @param <T> the value type
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxTakeUntil<T> extends FluxSource<T, T> {
+final class FluxTakeUntil<T> extends FluxOperator<T, T> {
 
 	final Predicate<? super T> predicate;
 
@@ -39,8 +40,8 @@ final class FluxTakeUntil<T> extends FluxSource<T, T> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
-		source.subscribe(new TakeUntilPredicateSubscriber<>(s, predicate));
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
+		source.subscribe(new TakeUntilPredicateSubscriber<>(s, predicate), ctx);
 	}
 
 	static final class TakeUntilPredicateSubscriber<T>

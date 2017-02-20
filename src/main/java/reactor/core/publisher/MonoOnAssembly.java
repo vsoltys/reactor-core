@@ -19,6 +19,7 @@ package reactor.core.publisher;
 import org.reactivestreams.Subscriber;
 import reactor.core.Fuseable;
 import reactor.core.publisher.FluxOnAssembly.AssemblySnapshotException;
+import reactor.util.context.Context;
 
 /**
  * Captures the current stacktrace when this publisher is created and makes it
@@ -33,7 +34,7 @@ import reactor.core.publisher.FluxOnAssembly.AssemblySnapshotException;
  * @param <T> the value type passing through
  * @see <a href="https://github.com/reactor/reactive-streams-commons">https://github.com/reactor/reactive-streams-commons</a>
  */
-final class MonoOnAssembly<T> extends MonoSource<T, T> implements Fuseable, AssemblyOp {
+final class MonoOnAssembly<T> extends MonoOperator<T, T> implements Fuseable, AssemblyOp {
 
 	final AssemblySnapshotException stacktrace;
 
@@ -55,7 +56,7 @@ final class MonoOnAssembly<T> extends MonoSource<T, T> implements Fuseable, Asse
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
-		FluxOnAssembly.subscribe(s, source, stacktrace);
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
+		FluxOnAssembly.subscribe(s, source, stacktrace, ctx);
 	}
 }

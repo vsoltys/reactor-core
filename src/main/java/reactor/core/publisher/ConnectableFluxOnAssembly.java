@@ -23,6 +23,7 @@ import reactor.core.Disposable;
 import reactor.core.Fuseable;
 import reactor.core.Scannable;
 import reactor.core.publisher.FluxOnAssembly.AssemblySnapshotException;
+import reactor.util.context.Context;
 
 /**
  * Captures the current stacktrace when this connectable publisher is created and
@@ -56,8 +57,8 @@ final class ConnectableFluxOnAssembly<T> extends ConnectableFlux<T> implements
 	}
 	
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
-		FluxOnAssembly.subscribe(s, source, stacktrace);
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
+		FluxOnAssembly.subscribe(s, source, stacktrace, ctx);
 	}
 
 	@Override

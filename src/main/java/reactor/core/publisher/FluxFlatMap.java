@@ -32,7 +32,7 @@ import org.reactivestreams.Subscription;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable;
 import reactor.core.Scannable;
-
+import reactor.util.context.Context;
 
 /**
  * Maps a sequence of values each into a Publisher and flattens them
@@ -42,7 +42,7 @@ import reactor.core.Scannable;
  * @param <R> the result value type
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxFlatMap<T, R> extends FluxSource<T, R> {
+final class FluxFlatMap<T, R> extends FluxOperator<T, R> {
 
 	final Function<? super T, ? extends Publisher<? extends R>> mapper;
 
@@ -56,7 +56,7 @@ final class FluxFlatMap<T, R> extends FluxSource<T, R> {
 
 	final Supplier<? extends Queue<R>> innerQueueSupplier;
 
-	FluxFlatMap(Publisher<? extends T> source,
+	FluxFlatMap(ContextualPublisher<? extends T> source,
 			Function<? super T, ? extends Publisher<? extends R>> mapper,
 			boolean delayError,
 			int maxConcurrency,
@@ -86,7 +86,7 @@ final class FluxFlatMap<T, R> extends FluxSource<T, R> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super R> s) {
+	public void subscribe(Subscriber<? super R> s, Context ctx) {
 
 		if (trySubscribeScalarMap(source, s, mapper, false)) {
 			return;
@@ -98,7 +98,7 @@ final class FluxFlatMap<T, R> extends FluxSource<T, R> {
 				maxConcurrency,
 				mainQueueSupplier,
 				prefetch,
-				innerQueueSupplier));
+				innerQueueSupplier), ctx);
 	}
 
 	/**
@@ -178,12 +178,10 @@ final class FluxFlatMap<T, R> extends FluxSource<T, R> {
 		return false;
 	}
 
-	static final class FlatMapMain<T, R> extends FlatMapTracker<FlatMapInner<R>>
+	static final class FlatMapMain<T, R> extends FlatMapTracker<FlatMapInner<R>, R>
 			implements InnerOperator<T, R> {
 
 		final Function<? super T, ? extends Publisher<? extends R>> mapper;
-
-		final Subscriber<? super R> actual;
 
 		final boolean delayError;
 
@@ -239,7 +237,7 @@ final class FluxFlatMap<T, R> extends FluxSource<T, R> {
 				Supplier<? extends Queue<R>> mainQueueSupplier,
 				int prefetch,
 				Supplier<? extends Queue<R>> innerQueueSupplier) {
-			this.actual = actual;
+			super(actual);
 			this.mapper = mapper;
 			this.delayError = delayError;
 			this.maxConcurrency = maxConcurrency;
@@ -311,11 +309,6 @@ final class FluxFlatMap<T, R> extends FluxSource<T, R> {
 				Operators.getAndAddCap(REQUESTED, this, n);
 				drain();
 			}
-		}
-
-		@Override
-		public final Subscriber<? super R> actual() {
-			return actual;
 		}
 
 		@Override
@@ -887,6 +880,11 @@ final class FluxFlatMap<T, R> extends FluxSource<T, R> {
 		}
 
 		@Override
+		public Context currentContext() {
+			return parent.context;
+		}
+
+		@Override
 		public void onSubscribe(Subscription s) {
 			if (Operators.setOnce(S, this, s)) {
 				if (s instanceof Fuseable.QueueSubscription) {
@@ -971,7 +969,7 @@ final class FluxFlatMap<T, R> extends FluxSource<T, R> {
 	}
 }
 
-abstract class FlatMapTracker<T> {
+abstract class FlatMapTracker<T, O> extends CachedContextProducer<O> {
 
 	volatile T[] array = empty();
 
@@ -987,6 +985,10 @@ abstract class FlatMapTracker<T> {
 			AtomicIntegerFieldUpdater.newUpdater(FlatMapTracker.class, "size");
 
 	static final int[] FREE_EMPTY = new int[0];
+
+	FlatMapTracker(Subscriber<? super O> actual) {
+		super(actual);
+	}
 
 	abstract T[] empty();
 

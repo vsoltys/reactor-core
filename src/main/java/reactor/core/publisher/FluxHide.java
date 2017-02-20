@@ -18,6 +18,7 @@ package reactor.core.publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Fuseable;
+import reactor.util.context.Context;
 
 /**
  * Hides the identities of the upstream Publisher object and its Subscription
@@ -26,15 +27,15 @@ import reactor.core.Fuseable;
  * @param <T> the value type
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxHide<T> extends FluxSource<T, T> {
+final class FluxHide<T> extends FluxOperator<T, T> {
 
 	FluxHide(Flux<? extends T> source) {
 		super(source);
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
-		source.subscribe(new HideSubscriber<>(s));
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
+		source.subscribe(new HideSubscriber<>(s), ctx);
 	}
 
 	static final class HideSubscriber<T> implements InnerOperator<T, T> {

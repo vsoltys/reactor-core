@@ -20,6 +20,7 @@ import java.util.function.BiFunction;
 
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import reactor.util.context.Context;
 
 /**
  * Accumulates the source values with an accumulator function and
@@ -39,7 +40,7 @@ import org.reactivestreams.Subscription;
  * @param <T> the input and accumulated value type
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxScan<T> extends FluxSource<T, T> {
+final class FluxScan<T> extends FluxOperator<T, T> {
 
 	final BiFunction<T, ? super T, T> accumulator;
 
@@ -49,8 +50,8 @@ final class FluxScan<T> extends FluxSource<T, T> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
-		source.subscribe(new ScanSubscriber<>(s, accumulator));
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
+		source.subscribe(new ScanSubscriber<>(s, accumulator), ctx);
 	}
 
 	static final class ScanSubscriber<T>

@@ -21,6 +21,7 @@ import java.util.function.Predicate;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Fuseable;
+import reactor.util.context.Context;
 
 /**
  * Emits a single boolean true if all values of the source sequence match
@@ -32,7 +33,7 @@ import reactor.core.Fuseable;
  * @param <T> the source value type
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class MonoAll<T> extends MonoSource<T, Boolean> implements Fuseable {
+final class MonoAll<T> extends MonoOperator<T, Boolean> implements Fuseable {
 
 	final Predicate<? super T> predicate;
 
@@ -42,8 +43,8 @@ final class MonoAll<T> extends MonoSource<T, Boolean> implements Fuseable {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super Boolean> s) {
-		source.subscribe(new AllSubscriber<T>(s, predicate));
+	public void subscribe(Subscriber<? super Boolean> s, Context ctx) {
+		source.subscribe(new AllSubscriber<T>(s, predicate), ctx);
 	}
 
 	static final class AllSubscriber<T> extends Operators.MonoSubscriber<T, Boolean> {

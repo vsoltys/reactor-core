@@ -24,7 +24,7 @@ import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Scannable;
-
+import reactor.util.context.Context;
 
 /**
  * Skips values from the main publisher until the other publisher signals
@@ -35,7 +35,7 @@ import reactor.core.Scannable;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">https://github.com/reactor/reactive-streams-commons</a>
  */
-final class FluxSkipUntilOther<T, U> extends FluxSource<T, T> {
+final class FluxSkipUntilOther<T, U> extends FluxOperator<T, T> {
 
 	final Publisher<U> other;
 
@@ -45,14 +45,14 @@ final class FluxSkipUntilOther<T, U> extends FluxSource<T, T> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
 		SkipUntilMainSubscriber<T> mainSubscriber = new SkipUntilMainSubscriber<>(s);
 
 		SkipUntilOtherSubscriber<U> otherSubscriber = new SkipUntilOtherSubscriber<>(mainSubscriber);
 
 		other.subscribe(otherSubscriber);
 
-		source.subscribe(mainSubscriber);
+		source.subscribe(mainSubscriber, ctx);
 	}
 
 	static final class SkipUntilOtherSubscriber<U> implements InnerConsumer<U> {
@@ -61,6 +61,11 @@ final class FluxSkipUntilOther<T, U> extends FluxSource<T, T> {
 
 		SkipUntilOtherSubscriber(SkipUntilMainSubscriber<?> main) {
 			this.main = main;
+		}
+
+		@Override
+		public Context currentContext() {
+			return main.currentContext();
 		}
 
 		@Override
@@ -118,16 +123,10 @@ final class FluxSkipUntilOther<T, U> extends FluxSource<T, T> {
 	}
 
 	static final class SkipUntilMainSubscriber<T>
+			extends CachedContextProducer<T>
 			implements InnerOperator<T, T> {
 
-		final Subscriber<? super T> actual;
-		volatile Subscription       main;
-
-		@Override
-		public final Subscriber<? super T> actual() {
-			return actual;
-		}
-
+		volatile Subscription main;
 		@SuppressWarnings("rawtypes")
 		static final AtomicReferenceFieldUpdater<SkipUntilMainSubscriber, Subscription>
 				MAIN =
@@ -146,7 +145,7 @@ final class FluxSkipUntilOther<T, U> extends FluxSource<T, T> {
 		volatile boolean gate;
 
 		SkipUntilMainSubscriber(Subscriber<? super T> actual) {
-			this.actual = Operators.serialize(actual);
+			super(Operators.serialize(actual));
 		}
 
 		@Override

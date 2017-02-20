@@ -22,6 +22,7 @@ import java.util.Objects;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Fuseable;
+import reactor.util.context.Context;
 
 /**
  * Expects and emits a single item from the source or signals
@@ -31,7 +32,7 @@ import reactor.core.Fuseable;
  * @param <T> the value type
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class MonoSingle<T> extends MonoSource<T, T> implements Fuseable {
+final class MonoSingle<T> extends MonoOperator<T, T> implements Fuseable {
 
 	final T       defaultValue;
 	final boolean completeOnEmpty;
@@ -52,8 +53,8 @@ final class MonoSingle<T> extends MonoSource<T, T> implements Fuseable {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
-		source.subscribe(new SingleSubscriber<>(s, defaultValue, completeOnEmpty));
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
+		source.subscribe(new SingleSubscriber<>(s, defaultValue, completeOnEmpty), ctx);
 	}
 
 	static final class SingleSubscriber<T> extends Operators.MonoSubscriber<T, T>  {

@@ -27,6 +27,7 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Disposable;
 import reactor.core.Scannable;
+import reactor.util.context.Context;
 
 /**
  * Splits the source sequence into possibly overlapping publishers.
@@ -34,7 +35,7 @@ import reactor.core.Scannable;
  * @param <T> the value type
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxWindowOnCancel<T> extends FluxSource<T, Flux<T>> {
+final class FluxWindowOnCancel<T> extends FluxOperator<T, Flux<T>> {
 
 	final Supplier<? extends Queue<T>> processorQueueSupplier;
 
@@ -46,8 +47,8 @@ final class FluxWindowOnCancel<T> extends FluxSource<T, Flux<T>> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super Flux<T>> s) {
-		source.subscribe(new WindowOnCancelSubscriber<>(s, processorQueueSupplier));
+	public void subscribe(Subscriber<? super Flux<T>> s, Context ctx) {
+		source.subscribe(new WindowOnCancelSubscriber<>(s, processorQueueSupplier), ctx);
 	}
 
 	static final class WindowOnCancelSubscriber<T>

@@ -22,10 +22,11 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.scheduler.Scheduler;
+import reactor.util.context.Context;
 
 import static reactor.core.scheduler.Scheduler.REJECTED;
 
-final class FluxCancelOn<T> extends FluxSource<T, T> {
+final class FluxCancelOn<T> extends FluxOperator<T, T> {
 
 	final Scheduler scheduler;
 
@@ -35,8 +36,8 @@ final class FluxCancelOn<T> extends FluxSource<T, T> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
-		source.subscribe(new CancelSubscriber<T>(s, scheduler));
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
+		source.subscribe(new CancelSubscriber<T>(s, scheduler), ctx);
 	}
 
 	static final class CancelSubscriber<T>

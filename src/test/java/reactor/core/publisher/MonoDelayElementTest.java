@@ -318,7 +318,7 @@ public class MonoDelayElementTest {
 	@Test
 	public void upstreamIsDelayedSource() {
 		AtomicReference<Object> upstream = new AtomicReference<>();
-		Mono<Integer> source = MonoSource.wrap(Flux.range(1, 5));
+		Mono<Integer> source = Mono.fromDirect(Flux.range(1, 5));
 
 
 		StepVerifier.withVirtualTime(() -> new MonoDelayElement<>(source, 2, TimeUnit.SECONDS,

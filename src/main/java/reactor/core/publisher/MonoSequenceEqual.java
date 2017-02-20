@@ -28,6 +28,7 @@ import org.reactivestreams.Subscription;
 import reactor.core.Exceptions;
 import reactor.core.Scannable;
 import reactor.util.concurrent.QueueSupplier;
+import reactor.util.context.Context;
 
 import static reactor.core.publisher.Operators.cancelledSubscription;
 
@@ -50,8 +51,8 @@ final class MonoSequenceEqual<T> extends Mono<Boolean> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super Boolean> s) {
-		EqualCoordinator<T> ec = new EqualCoordinator<>(s, bufferSize, first, second, comparer);
+	public void subscribe(Subscriber<? super Boolean> s, Context ctx) {
+		EqualCoordinator<T> ec = new EqualCoordinator<>(s, bufferSize, first, second, comparer, ctx);
 		s.onSubscribe(ec);
 		ec.subscribe();
 	}
@@ -63,6 +64,7 @@ final class MonoSequenceEqual<T> extends Mono<Boolean> {
 		final Publisher<? extends T> second;
 		final EqualSubscriber<T> firstSubscriber;
 		final EqualSubscriber<T> secondSubscriber;
+		final Context context;
 
 		volatile boolean cancelled;
 
@@ -82,9 +84,10 @@ final class MonoSequenceEqual<T> extends Mono<Boolean> {
 
 		EqualCoordinator(Subscriber<? super Boolean> actual, int bufferSize,
 				Publisher<? extends T> first, Publisher<? extends T> second,
-				BiPredicate<? super T, ? super T> comparer) {
+				BiPredicate<? super T, ? super T> comparer,
+				Context context) {
 			this.actual = actual;
-
+			this.context = context;
 			this.first = first;
 			this.second = second;
 			this.comparer = comparer;
@@ -295,6 +298,11 @@ final class MonoSequenceEqual<T> extends Mono<Boolean> {
 			this.parent = parent;
 			this.bufferSize = bufferSize;
 			this.queue = QueueSupplier.<T>get(bufferSize).get();
+		}
+
+		@Override
+		public Context currentContext() {
+			return parent.context;
 		}
 
 		@Override

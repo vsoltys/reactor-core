@@ -24,9 +24,9 @@ import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
-import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import reactor.util.context.Context;
 
 /**
  * Buffers a certain number of subsequent elements and emits the buffers.
@@ -36,7 +36,7 @@ import org.reactivestreams.Subscription;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxBuffer<T, C extends Collection<? super T>> extends FluxSource<T, C> {
+final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<T, C> {
 
 	final int size;
 
@@ -44,11 +44,11 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxSource<T,
 
 	final Supplier<C> bufferSupplier;
 
-	FluxBuffer(Publisher<? extends T> source, int size, Supplier<C> bufferSupplier) {
+	FluxBuffer(ContextualPublisher<? extends T> source, int size, Supplier<C> bufferSupplier) {
 		this(source, size, size, bufferSupplier);
 	}
 
-	FluxBuffer(Publisher<? extends T> source,
+	FluxBuffer(ContextualPublisher<? extends T> source,
 			int size,
 			int skip,
 			Supplier<C> bufferSupplier) {
@@ -67,18 +67,19 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxSource<T,
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super C> s) {
+	public void subscribe(Subscriber<? super C> s, Context ctx) {
 		if (size == skip) {
-			source.subscribe(new BufferExactSubscriber<>(s, size, bufferSupplier));
+			source.subscribe(new BufferExactSubscriber<>(s, size, bufferSupplier), ctx);
 		}
 		else if (skip > size) {
-			source.subscribe(new BufferSkipSubscriber<>(s, size, skip, bufferSupplier));
+			source.subscribe(new BufferSkipSubscriber<>(s, size, skip, bufferSupplier),
+					ctx);
 		}
 		else {
 			source.subscribe(new BufferOverlappingSubscriber<>(s,
 					size,
 					skip,
-					bufferSupplier));
+					bufferSupplier), ctx);
 		}
 	}
 

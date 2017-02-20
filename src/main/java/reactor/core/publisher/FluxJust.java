@@ -20,7 +20,7 @@ import java.util.Objects;
 
 import org.reactivestreams.Subscriber;
 import reactor.core.Fuseable;
-
+import reactor.util.context.Context;
 
 /**
  * A Stream that emits only one value and then complete.
@@ -63,7 +63,7 @@ final class FluxJust<T> extends Flux<T> implements Fuseable.ScalarCallable<T>, F
 	}
 
 	@Override
-	public void subscribe(final Subscriber<? super T> subscriber) {
+	public void subscribe(final Subscriber<? super T> subscriber, Context context) {
 		subscriber.onSubscribe(new WeakScalarSubscription<>(value, subscriber));
 	}
 

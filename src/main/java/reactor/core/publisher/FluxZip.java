@@ -35,7 +35,7 @@ import reactor.core.Disposable;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable;
 import reactor.core.Scannable;
-
+import reactor.util.context.Context;
 
 /**
  * Repeatedly takes one item from all source Publishers and
@@ -122,19 +122,20 @@ final class FluxZip<T, R> extends Flux<R> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super R> s) {
+	public void subscribe(Subscriber<? super R> s, Context ctx) {
 		Publisher<? extends T>[] srcs = sources;
 		if (srcs != null) {
-			handleArrayMode(s, srcs);
+			handleArrayMode(s, srcs, ctx);
 		}
 		else {
-			handleIterableMode(s, sourcesIterable);
+			handleIterableMode(s, sourcesIterable, ctx);
 		}
 	}
 
 	@SuppressWarnings("unchecked")
 	void handleIterableMode(Subscriber<? super R> s,
-			Iterable<? extends Publisher<? extends T>> sourcesIterable) {
+			Iterable<? extends Publisher<? extends T>> sourcesIterable,
+			Context ctx) {
 		Object[] scalars = new Object[8];
 		Publisher<? extends T>[] srcs = new Publisher[8];
 
@@ -208,11 +209,12 @@ final class FluxZip<T, R> extends Flux<R> {
 			scalars = Arrays.copyOfRange(scalars, 0, n, scalars.getClass());
 		}
 
-		handleBoth(s, srcs, scalars, n, sc);
+		handleBoth(s, srcs, scalars, n, sc, ctx);
 	}
 
 	@SuppressWarnings("unchecked")
-	void handleArrayMode(Subscriber<? super R> s, Publisher<? extends T>[] srcs) {
+	void handleArrayMode(Subscriber<? super R> s, Publisher<? extends T>[] srcs,
+			Context ctx) {
 
 		int n = srcs.length;
 
@@ -255,18 +257,19 @@ final class FluxZip<T, R> extends Flux<R> {
 			}
 		}
 
-		handleBoth(s, srcs, scalars, n, sc);
+		handleBoth(s, srcs, scalars, n, sc, ctx);
 	}
 
 	void handleBoth(Subscriber<? super R> s,
 			Publisher<? extends T>[] srcs,
 			Object[] scalars,
 			int n,
-			int sc) {
+			int sc,
+			Context ctx) {
 		if (sc != 0) {
 			if (n != sc) {
 				ZipSingleCoordinator<T, R> coordinator =
-						new ZipSingleCoordinator<>(s, scalars, n, zipper);
+						new ZipSingleCoordinator<>(s, scalars, n, zipper, ctx);
 
 				s.onSubscribe(coordinator);
 
@@ -295,7 +298,7 @@ final class FluxZip<T, R> extends Flux<R> {
 		else {
 
 			ZipCoordinator<T, R> coordinator =
-					new ZipCoordinator<>(s, zipper, n, queueSupplier, prefetch);
+					new ZipCoordinator<>(s, zipper, n, queueSupplier, prefetch, ctx);
 
 			s.onSubscribe(coordinator);
 
@@ -309,6 +312,8 @@ final class FluxZip<T, R> extends Flux<R> {
 
 		final Object[] scalars;
 
+		final Context context;
+
 		final ZipSingleSubscriber<T>[] subscribers;
 
 		volatile int wip;
@@ -320,9 +325,10 @@ final class FluxZip<T, R> extends Flux<R> {
 		ZipSingleCoordinator(Subscriber<? super R> subscriber,
 				Object[] scalars,
 				int n,
-				Function<? super Object[], ? extends R> zipper) {
+				Function<? super Object[], ? extends R> zipper,
+				Context context) {
 			super(subscriber);
-
+			this.context = context;
 			this.zipper = zipper;
 			this.scalars = scalars;
 			ZipSingleSubscriber<T>[] a = new ZipSingleSubscriber[n];
@@ -437,6 +443,11 @@ final class FluxZip<T, R> extends Flux<R> {
 		}
 
 		@Override
+		public Context currentContext() {
+			return parent.context;
+		}
+
+		@Override
 		public Object scan(Attr key) {
 			switch (key){
 				case PARENT:
@@ -506,6 +517,8 @@ final class FluxZip<T, R> extends Flux<R> {
 
 		final Function<? super Object[], ? extends R> zipper;
 
+		final Context context;
+
 		volatile int wip;
 		@SuppressWarnings("rawtypes")
 		static final AtomicIntegerFieldUpdater<ZipCoordinator> WIP =
@@ -531,9 +544,10 @@ final class FluxZip<T, R> extends Flux<R> {
 				Function<? super Object[], ? extends R> zipper,
 				int n,
 				Supplier<? extends Queue<T>> queueSupplier,
-				int prefetch) {
+				int prefetch, Context ctx) {
 			this.actual = actual;
 			this.zipper = zipper;
+			this.context= ctx;
 			@SuppressWarnings("unchecked") ZipInner<T>[] a = new ZipInner[n];
 			for (int i = 0; i < n; i++) {
 				a[i] = new ZipInner<>(this, prefetch, i, queueSupplier);
@@ -869,6 +883,11 @@ final class FluxZip<T, R> extends Flux<R> {
 				}
 			}
 			parent.drain();
+		}
+
+		@Override
+		public Context currentContext() {
+			return parent.context;
 		}
 
 		@Override

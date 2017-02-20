@@ -36,6 +36,7 @@ import reactor.util.Logger;
 import reactor.util.Loggers;
 import reactor.util.concurrent.QueueSupplier;
 import reactor.util.concurrent.WaitStrategy;
+import reactor.util.context.Context;
 
 /**
  ** An implementation of a RingBuffer backed message-passing Processor implementing work-queue distribution with
@@ -604,7 +605,7 @@ public final class WorkQueueProcessor<E> extends EventLoopProcessor<E> {
 	}
 
 	@Override
-	public void subscribe(final Subscriber<? super E> subscriber) {
+	public void subscribe(final Subscriber<? super E> subscriber, Context ctx) {
 		if (subscriber == null) {
 			throw Exceptions.argumentIsNullException();
 		}

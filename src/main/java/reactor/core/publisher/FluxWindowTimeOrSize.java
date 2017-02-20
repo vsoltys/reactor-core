@@ -19,6 +19,8 @@ package reactor.core.publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.scheduler.Scheduler;
+import reactor.util.context.Context;
+import reactor.util.context.ContextRelay;
 
 
 
@@ -34,9 +36,10 @@ final class FluxWindowTimeOrSize<T> extends FluxBatch<T, Flux<T>> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super Flux<T>> subscriber) {
+	public void subscribe(Subscriber<? super Flux<T>> subscriber, Context ctx) {
 		source.subscribe(new WindowTimeoutSubscriber<>(prepareSub(subscriber),
-						batchSize, timespan, timer));
+						batchSize, timespan, timer, ctx),
+				ctx);
 	}
 
 	final static class Window<T> extends Flux<T> implements InnerOperator<T, T> {
@@ -44,11 +47,13 @@ final class FluxWindowTimeOrSize<T> extends FluxBatch<T, Flux<T>> {
 		final UnicastProcessor<T> processor;
 		final Scheduler      timer;
 
+		final Context context;
 		int count = 0;
 
-		Window(Scheduler timer) {
+		Window(Scheduler timer, Context ctx) {
 			this.processor = UnicastProcessor.create();
 			this.timer = timer;
+			this.context = ctx;
 		}
 
 		@Override
@@ -72,8 +77,9 @@ final class FluxWindowTimeOrSize<T> extends FluxBatch<T, Flux<T>> {
 		}
 
 		@Override
-		public void subscribe(Subscriber<? super T> s) {
-			processor.subscribe(s);
+		public void subscribe(Subscriber<? super T> s, Context ctx) {
+			ContextRelay.set(s, context);
+			processor.subscribe(s, ctx);
 		}
 
 		@Override
@@ -96,15 +102,24 @@ final class FluxWindowTimeOrSize<T> extends FluxBatch<T, Flux<T>> {
 
 		final Scheduler timer;
 
+		Context ctx;
+
 		Window<T> currentWindow;
 
 		WindowTimeoutSubscriber(Subscriber<? super Flux<T>> actual,
 				int backlog,
 				long timespan,
-				Scheduler timer) {
+				Scheduler timer,
+				Context ctx) {
 			super(actual, backlog, true, timespan, timer.createWorker());
 			this.timer = timer;
+			this.ctx = ctx;
+		}
 
+		@Override
+		public void onContext(Context context) {
+			ctx = context;
+			super.onContext(context);
 		}
 
 		@Override
@@ -113,7 +128,7 @@ final class FluxWindowTimeOrSize<T> extends FluxBatch<T, Flux<T>> {
 		}
 
 		Flux<T> createWindowStream() {
-			Window<T> _currentWindow = new Window<>(timer);
+			Window<T> _currentWindow = new Window<>(timer, ctx);
 			currentWindow = _currentWindow;
 			return _currentWindow;
 		}

@@ -31,6 +31,7 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Disposable;
 import reactor.core.Exceptions;
+import reactor.util.context.Context;
 
 /**
  * Splits the source sequence into potentially overlapping windowEnds controlled by items
@@ -42,7 +43,7 @@ import reactor.core.Exceptions;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxWindowStartEnd<T, U, V> extends FluxSource<T, Flux<T>> {
+final class FluxWindowStartEnd<T, U, V> extends FluxOperator<T, Flux<T>> {
 
 	final Publisher<U> start;
 
@@ -72,7 +73,7 @@ final class FluxWindowStartEnd<T, U, V> extends FluxSource<T, Flux<T>> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super Flux<T>> s) {
+	public void subscribe(Subscriber<? super Flux<T>> s, Context ctx) {
 
 		Queue<Object> q = drainQueueSupplier.get();
 
@@ -83,7 +84,7 @@ final class FluxWindowStartEnd<T, U, V> extends FluxSource<T, Flux<T>> {
 
 		start.subscribe(main.starter);
 
-		source.subscribe(main);
+		source.subscribe(main, ctx);
 	}
 
 	static final class WindowStartEndMainSubscriber<T, U, V>

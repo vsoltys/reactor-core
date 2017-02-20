@@ -29,7 +29,7 @@ import reactor.core.scheduler.Scheduler;
 /**
  * @author Stephane Maldini
  */
-abstract class FluxBatch<T, V> extends FluxSource<T, V> {
+abstract class FluxBatch<T, V> extends FluxOperator<T, V> {
 
 	final int            batchSize;
 	final long           timespan;

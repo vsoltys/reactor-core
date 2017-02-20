@@ -23,9 +23,9 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import reactor.util.context.Context;
 
 /**
  * Maps the values of the source publisher one-on-one via a mapper function.
@@ -34,7 +34,7 @@ import org.reactivestreams.Subscription;
  * @param <R> the result value type
  * @author Stephane Maldini
  */
-final class FluxMapSignal<T, R> extends FluxSource<T, R> {
+final class FluxMapSignal<T, R> extends FluxOperator<T, R> {
 
     final Function<? super T, ? extends R> mapperNext;
     final Function<Throwable, ? extends R> mapperError;
@@ -50,7 +50,7 @@ final class FluxMapSignal<T, R> extends FluxSource<T, R> {
      *
      * @throws NullPointerException if either {@code source} or {@code mapper} is null.
      */
-    FluxMapSignal(Publisher<? extends T> source,
+    FluxMapSignal(ContextualPublisher<? extends T> source,
             Function<? super T, ? extends R> mapperNext,
             Function<Throwable, ? extends R> mapperError,
             Supplier<? extends R>            mapperComplete) {
@@ -65,8 +65,8 @@ final class FluxMapSignal<T, R> extends FluxSource<T, R> {
     }
 
     @Override
-    public void subscribe(Subscriber<? super R> s) {
-        source.subscribe(new FluxMapSignalSubscriber<>(s, this));
+    public void subscribe(Subscriber<? super R> s, Context ctx) {
+        source.subscribe(new FluxMapSignalSubscriber<>(s, this), ctx);
     }
 
     static final class FluxMapSignalSubscriber<T, R> 

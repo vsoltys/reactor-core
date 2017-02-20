@@ -25,7 +25,7 @@ import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Scannable;
-
+import reactor.util.context.Context;
 
 /**
  * Waits for a Mono source to produce a value or terminate, as well as a Publisher source
@@ -76,10 +76,11 @@ final class MonoUntilOther<T> extends Mono<T> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
+	public void subscribe(Subscriber<? super T> s, Context context) {
 		UntilOtherCoordinator<T> parent = new UntilOtherCoordinator<>(s,
 				delayError,
-				others.length + 1);
+				others.length + 1,
+				context);
 		s.onSubscribe(parent);
 		parent.subscribe(source, others);
 	}
@@ -88,6 +89,7 @@ final class MonoUntilOther<T> extends Mono<T> {
 			extends Operators.MonoSubscriber<T, T> {
 
 		final int                 n;
+		final Context             context;
 		final boolean             delayError;
 		final UntilOtherSource<T> sourceSubscriber;
 		final UntilOtherTrigger[] triggerSubscribers;
@@ -98,10 +100,10 @@ final class MonoUntilOther<T> extends Mono<T> {
 
 		UntilOtherCoordinator(Subscriber<? super T> subscriber,
 				boolean delayError,
-				int n) {
+				int n, Context context) {
 			super(subscriber);
 			this.n = n;
-
+			this.context = context;
 			this.delayError = delayError;
 			sourceSubscriber = new UntilOtherSource<>(this);
 			triggerSubscribers = new UntilOtherTrigger[n - 1];
@@ -306,6 +308,11 @@ final class MonoUntilOther<T> extends Mono<T> {
 					return error;
 			}
 			return null;
+		}
+
+		@Override
+		public Context currentContext() {
+			return parent.context;
 		}
 
 		@Override

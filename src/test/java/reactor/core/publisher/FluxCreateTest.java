@@ -37,6 +37,7 @@ import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 import reactor.test.StepVerifier.Step;
 import reactor.test.subscriber.AssertSubscriber;
+import reactor.util.context.Context;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
@@ -820,6 +821,29 @@ public class FluxCreateTest {
 	}
 
 	@Test
+	public void context() {
+		AtomicInteger x = new AtomicInteger();
+		Flux.create(s -> s.contextualize(c -> c.put("test", c.<Integer>get("test") + 1))
+		                  .next("1")
+		                  .next("2")
+		                  .complete())
+		    .subscribe(new BaseSubscriber<Object>() {
+			    @Override
+			    public Context currentContext() {
+				    return Context.empty()
+				                  .put("test", 1);
+			    }
+
+			    @Override
+			    protected void hookOnContext(Context context) {
+				    x.set(context.get("test"));
+			    }
+		    });
+
+		assertThat(x.get()).isEqualTo(2);
+	}
+
+	@Test
 	public void fluxPushOnRequest() {
 		AtomicInteger index = new AtomicInteger(1);
 		AtomicInteger onRequest = new AtomicInteger();
@@ -835,16 +859,16 @@ public class FluxCreateTest {
 		}, OverflowStrategy.BUFFER);
 
 		StepVerifier.create(created, 0)
-					.expectSubscription()
-					.thenAwait()
-					.thenRequest(1)
-					.expectNext(1)
-					.thenRequest(2)
-					.expectNext(2, 3)
-					.thenRequest(2)
-					.expectNext(4, 5)
-					.expectComplete()
-					.verify();
+		            .expectSubscription()
+		            .thenAwait()
+		            .thenRequest(1)
+		            .expectNext(1)
+		            .thenRequest(2)
+		            .expectNext(2, 3)
+		            .thenRequest(2)
+		            .expectNext(4, 5)
+		            .expectComplete()
+		            .verify();
 		assertThat(onRequest.get()).isEqualTo(1);
 	}
 
@@ -860,14 +884,14 @@ public class FluxCreateTest {
 		});
 
 		StepVerifier.create(created, 0)
-					.expectSubscription()
-					.thenAwait()
-					.thenRequest(1)
-					.expectNext(1)
-					.thenRequest(2)
-					.expectNext(2, 3)
-					.thenCancel()
-					.verify();
+		            .expectSubscription()
+		            .thenAwait()
+		            .thenRequest(1)
+		            .expectNext(1)
+		            .thenRequest(2)
+		            .expectNext(2, 3)
+		            .thenCancel()
+		            .verify();
 	}
 
 	@Test
@@ -880,40 +904,40 @@ public class FluxCreateTest {
 	private void testFluxCreateOnRequestSingleThread(OverflowStrategy overflowStrategy) {
 		RequestTrackingTestQueue queue = new RequestTrackingTestQueue();
 		Flux<Integer> created = Flux.create(pushPullSink -> {
-				assertThat(pushPullSink instanceof SerializedSink).isTrue();
-				SerializedSink<Integer> s = (SerializedSink<Integer>)pushPullSink;
-				FluxSink<Integer> s1 = s.onRequest(n -> {
-					if (queue.sink == null) {
-						queue.initialize(s);
-						assertThat(n).isEqualTo(10);
-					}
+			assertThat(pushPullSink instanceof SerializedSink).isTrue();
+			SerializedSink<Integer> s = (SerializedSink<Integer>)pushPullSink;
+			FluxSink<Integer> s1 = s.onRequest(n -> {
+				if (queue.sink == null) {
+					queue.initialize(s);
+					assertThat(n).isEqualTo(10);
+				}
 
-					queue.generate(5);
-					queue.onRequest((int) n);
-					if (s.sink instanceof BufferAsyncSink) {
-						assertThat(((BufferAsyncSink<?>)s.sink).queue.size()).isEqualTo(0);
-					}
-					queue.pushToSink();
-				});
-				assertThat(s1 instanceof SerializedSink).isTrue();
-				assertThat(s.onDispose(() -> {}) instanceof SerializedSink).isTrue();
-				assertThat(s.onCancel(() -> {}) instanceof SerializedSink).isTrue();
+				queue.generate(5);
+				queue.onRequest((int) n);
+				if (s.sink instanceof BufferAsyncSink) {
+					assertThat(((BufferAsyncSink<?>)s.sink).queue.size()).isEqualTo(0);
+				}
+				queue.pushToSink();
+			});
+			assertThat(s1 instanceof SerializedSink).isTrue();
+			assertThat(s.onDispose(() -> {}) instanceof SerializedSink).isTrue();
+			assertThat(s.onCancel(() -> {}) instanceof SerializedSink).isTrue();
 		}, overflowStrategy);
 
 		Step<Integer> step = StepVerifier.create(created, 0);
 		for (int i = 0; i < 100; i++) {
 			step = step.thenRequest(10)
-					.expectNextCount(5)
-					.then(() -> queue.generate(15))
-					.thenRequest(5)
-					.thenRequest(5)
-					.expectNextCount(15)
-					.thenAwait()
-					.thenRequest(25)
-					.then(() -> queue.generate(5))
-					.then(() -> queue.generate(5))
-					.expectNextCount(25)
-					.thenAwait();
+			           .expectNextCount(5)
+			           .then(() -> queue.generate(15))
+			           .thenRequest(5)
+			           .thenRequest(5)
+			           .expectNextCount(15)
+			           .thenAwait()
+			           .thenRequest(25)
+			           .then(() -> queue.generate(5))
+			           .then(() -> queue.generate(5))
+			           .expectNextCount(25)
+			           .thenAwait();
 		}
 		step.thenCancel().verify();
 		assertThat(queue.queue.isEmpty()).isTrue();
@@ -954,9 +978,9 @@ public class FluxCreateTest {
 		}, overflowStrategy);
 
 		StepVerifier.create(created.take(count).publishOn(Schedulers.parallel(), 1000))
-					.expectNextCount(count)
-					.expectComplete()
-					.verify();
+		            .expectNextCount(count)
+		            .expectComplete()
+		            .verify();
 	}
 
 	private static class TestQueue {

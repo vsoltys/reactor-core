@@ -29,6 +29,7 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Disposable;
 import reactor.core.Scannable;
+import reactor.util.context.Context;
 
 /**
  * Splits the source sequence into possibly overlapping publishers.
@@ -37,7 +38,7 @@ import reactor.core.Scannable;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">https://github.com/reactor/reactive-streams-commons</a>
  */
-final class FluxWindow<T> extends FluxSource<T, Flux<T>> {
+final class FluxWindow<T> extends FluxOperator<T, Flux<T>> {
 
 	final int size;
 
@@ -82,24 +83,24 @@ final class FluxWindow<T> extends FluxSource<T, Flux<T>> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super Flux<T>> s) {
+	public void subscribe(Subscriber<? super Flux<T>> s, Context ctx) {
 		if (skip == size) {
 			source.subscribe(new WindowExactSubscriber<>(s,
 					size,
-					processorQueueSupplier));
+					processorQueueSupplier), ctx);
 		}
 		else if (skip > size) {
 			source.subscribe(new WindowSkipSubscriber<>(s,
 					size,
 					skip,
-					processorQueueSupplier));
+					processorQueueSupplier), ctx);
 		}
 		else {
 			source.subscribe(new WindowOverlapSubscriber<>(s,
 					size,
 					skip,
 					processorQueueSupplier,
-					overflowQueueSupplier.get()));
+					overflowQueueSupplier.get()), ctx);
 		}
 	}
 

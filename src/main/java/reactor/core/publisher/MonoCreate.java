@@ -15,14 +15,18 @@
  */
 package reactor.core.publisher;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.LongConsumer;
 
 import org.reactivestreams.Subscriber;
 import reactor.core.Disposable;
 import reactor.core.publisher.FluxCreate.SinkDisposable;
+import reactor.util.context.Context;
+import reactor.util.context.ContextRelay;
 
 
 
@@ -41,8 +45,8 @@ final class MonoCreate<T> extends Mono<T> {
 
 
     @Override
-    public void subscribe(Subscriber<? super T> s) {
-	    DefaultMonoSink<T> emitter = new DefaultMonoSink<>(s);
+    public void subscribe(Subscriber<? super T> s, Context ctx) {
+	    DefaultMonoSink<T> emitter = new DefaultMonoSink<>(s, ctx);
 
         s.onSubscribe(emitter);
 
@@ -53,10 +57,12 @@ final class MonoCreate<T> extends Mono<T> {
         }
     }
 
-	static final class DefaultMonoSink<T>
+	static final class DefaultMonoSink<T> extends AtomicBoolean
 			implements MonoSink<T>, InnerProducer<T> {
 
 		final Subscriber<? super T> actual;
+
+		final Context context;
 
 		volatile Disposable disposable;
 		@SuppressWarnings("rawtypes")
@@ -80,9 +86,20 @@ final class MonoCreate<T> extends Mono<T> {
         static final int HAS_REQUEST_NO_VALUE = 2;
         static final int HAS_REQUEST_HAS_VALUE = 3;
 
-		DefaultMonoSink(Subscriber<? super T> actual) {
+		DefaultMonoSink(Subscriber<? super T> actual, Context ctx) {
 			this.actual = actual;
+			this.context = ctx;
+		}
 
+		@Override
+		public MonoSink<T> contextualize(Function<Context, Context> doOnContext) {
+			if (compareAndSet(false, true)) {
+				Context c = doOnContext.apply(context);
+				if(c != context) {
+					ContextRelay.set(actual, c);
+				}
+			}
+			return this;
 		}
 
 		@Override

@@ -22,6 +22,7 @@ import java.util.function.BiFunction;
 
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import reactor.util.context.Context;
 
 /**
  * Pairwise combines elements of a publisher and an iterable sequence through a function.
@@ -32,7 +33,7 @@ import org.reactivestreams.Subscription;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxZipIterable<T, U, R> extends FluxSource<T, R> {
+final class FluxZipIterable<T, U, R> extends FluxOperator<T, R> {
 
 	final Iterable<? extends U> other;
 
@@ -47,7 +48,7 @@ final class FluxZipIterable<T, U, R> extends FluxSource<T, R> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super R> s) {
+	public void subscribe(Subscriber<? super R> s, Context ctx) {
 		Iterator<? extends U> it;
 
 		try {
@@ -74,7 +75,7 @@ final class FluxZipIterable<T, U, R> extends FluxSource<T, R> {
 			return;
 		}
 
-		source.subscribe(new ZipSubscriber<>(s, it, zipper));
+		source.subscribe(new ZipSubscriber<>(s, it, zipper), ctx);
 	}
 
 	static final class ZipSubscriber<T, U, R>

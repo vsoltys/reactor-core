@@ -26,11 +26,11 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable;
+import reactor.util.context.Context;
 
 /**
  * Concatenates values from Iterable sequences generated via a mapper function.
@@ -40,7 +40,7 @@ import reactor.core.Fuseable;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxFlattenIterable<T, R> extends FluxSource<T, R> implements Fuseable {
+final class FluxFlattenIterable<T, R> extends FluxOperator<T, R> implements Fuseable {
 
 	final Function<? super T, ? extends Iterable<? extends R>> mapper;
 
@@ -48,7 +48,7 @@ final class FluxFlattenIterable<T, R> extends FluxSource<T, R> implements Fuseab
 
 	final Supplier<Queue<T>> queueSupplier;
 
-	FluxFlattenIterable(Publisher<? extends T> source,
+	FluxFlattenIterable(ContextualPublisher<? extends T> source,
 			Function<? super T, ? extends Iterable<? extends R>> mapper,
 			int prefetch,
 			Supplier<Queue<T>> queueSupplier) {
@@ -68,7 +68,7 @@ final class FluxFlattenIterable<T, R> extends FluxSource<T, R> implements Fuseab
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public void subscribe(Subscriber<? super R> s) {
+	public void subscribe(Subscriber<? super R> s, Context ctx) {
 		if (source instanceof Callable) {
 			T v;
 
@@ -104,7 +104,7 @@ final class FluxFlattenIterable<T, R> extends FluxSource<T, R> implements Fuseab
 		source.subscribe(new FlattenIterableSubscriber<>(s,
 				mapper,
 				prefetch,
-				queueSupplier));
+				queueSupplier), ctx);
 	}
 
 	static final class FlattenIterableSubscriber<T, R>

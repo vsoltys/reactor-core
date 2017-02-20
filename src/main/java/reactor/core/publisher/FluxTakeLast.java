@@ -22,6 +22,7 @@ import java.util.function.BooleanSupplier;
 
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import reactor.util.context.Context;
 
 /**
  * Emits the last N values the source emitted before its completion.
@@ -30,7 +31,7 @@ import org.reactivestreams.Subscription;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxTakeLast<T> extends FluxSource<T, T> {
+final class FluxTakeLast<T> extends FluxOperator<T, T> {
 
 	final int n;
 
@@ -43,12 +44,12 @@ final class FluxTakeLast<T> extends FluxSource<T, T> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
 		if (n == 0) {
-			source.subscribe(new TakeLastZeroSubscriber<>(s));
+			source.subscribe(new TakeLastZeroSubscriber<>(s), ctx);
 		}
 		else {
-			source.subscribe(new TakeLastManySubscriber<>(s, n));
+			source.subscribe(new TakeLastManySubscriber<>(s, n), ctx);
 		}
 	}
 

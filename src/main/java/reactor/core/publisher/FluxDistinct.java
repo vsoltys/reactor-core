@@ -26,6 +26,7 @@ import org.reactivestreams.Subscription;
 import reactor.core.Fuseable;
 import reactor.core.Fuseable.ConditionalSubscriber;
 import reactor.core.Fuseable.QueueSubscription;
+import reactor.util.context.Context;
 
 /**
  * For each subscriber, tracks the source values that have been seen and
@@ -38,7 +39,7 @@ import reactor.core.Fuseable.QueueSubscription;
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
 final class FluxDistinct<T, K, C extends Collection<? super K>> extends
-                                                                FluxSource<T, T> {
+                                                                FluxOperator<T, T> {
 
 	final Function<? super T, ? extends K> keyExtractor;
 
@@ -55,7 +56,7 @@ final class FluxDistinct<T, K, C extends Collection<? super K>> extends
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public void subscribe(Subscriber<? super T> s) {
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
 		C collection;
 
 		try {
@@ -70,10 +71,10 @@ final class FluxDistinct<T, K, C extends Collection<? super K>> extends
 		if (s instanceof ConditionalSubscriber) {
 			source.subscribe(new DistinctConditionalSubscriber<>((ConditionalSubscriber<? super T>) s,
 					collection,
-					keyExtractor));
+					keyExtractor), ctx);
 		}
 		else {
-			source.subscribe(new DistinctSubscriber<>(s, collection, keyExtractor));
+			source.subscribe(new DistinctSubscriber<>(s, collection, keyExtractor), ctx);
 		}
 	}
 

@@ -25,7 +25,7 @@ import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Scannable;
-
+import reactor.util.context.Context;
 
 /**
  * Combines values from a main Publisher with values from another
@@ -43,7 +43,7 @@ import reactor.core.Scannable;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxWithLatestFrom<T, U, R> extends FluxSource<T, R> {
+final class FluxWithLatestFrom<T, U, R> extends FluxOperator<T, R> {
 
 	final Publisher<? extends U> other;
 
@@ -58,7 +58,7 @@ final class FluxWithLatestFrom<T, U, R> extends FluxSource<T, R> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super R> s) {
+	public void subscribe(Subscriber<? super R> s, Context ctx) {
 		Subscriber<R> serial = Operators.serialize(s);
 
 		WithLatestFromSubscriber<T, U, R> main =
@@ -69,21 +69,15 @@ final class FluxWithLatestFrom<T, U, R> extends FluxSource<T, R> {
 
 		other.subscribe(secondary);
 
-		source.subscribe(main);
+		source.subscribe(main, ctx);
 	}
 
-	static final class WithLatestFromSubscriber<T, U, R>
-			implements InnerOperator<T, R>, InnerProducer<R> {
+	static final class WithLatestFromSubscriber<T, U, R> extends CachedContextProducer<R>
+			implements InnerOperator<T, R> {
 
 		final BiFunction<? super T, ? super U, ? extends R> combiner;
-		final Subscriber<? super R>                         actual;
 
 		volatile Subscription main;
-
-		@Override
-		public final Subscriber<? super R> actual() {
-			return actual;
-		}
 
 		@SuppressWarnings("rawtypes")
 		static final AtomicReferenceFieldUpdater<WithLatestFromSubscriber, Subscription>
@@ -104,7 +98,7 @@ final class FluxWithLatestFrom<T, U, R> extends FluxSource<T, R> {
 
 		WithLatestFromSubscriber(Subscriber<? super R> actual,
 				BiFunction<? super T, ? super U, ? extends R> combiner) {
-			this.actual = actual;
+			super(actual);
 			this.combiner = combiner;
 		}
 
@@ -279,6 +273,11 @@ final class FluxWithLatestFrom<T, U, R> extends FluxSource<T, R> {
 				return main;
 			}
 			return null;
+		}
+
+		@Override
+		public Context currentContext() {
+			return main.currentContext();
 		}
 
 		@Override

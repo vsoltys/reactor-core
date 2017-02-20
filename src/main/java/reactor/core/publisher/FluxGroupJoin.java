@@ -36,6 +36,8 @@ import reactor.core.Disposable;
 import reactor.core.Exceptions;
 import reactor.core.Scannable;
 import reactor.util.concurrent.OpenHashSet;
+import reactor.util.context.Context;
+import reactor.util.context.ContextRelay;
 
 
 
@@ -58,7 +60,7 @@ import reactor.util.concurrent.OpenHashSet;
  * @since 3.0
  */
 final class FluxGroupJoin<TLeft, TRight, TLeftEnd, TRightEnd, R>
-		extends FluxSource<TLeft, R> {
+		extends FluxOperator<TLeft, R> {
 
 	final Publisher<? extends TRight> other;
 
@@ -89,7 +91,7 @@ final class FluxGroupJoin<TLeft, TRight, TLeftEnd, TRightEnd, R>
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super R> s) {
+	public void subscribe(Subscriber<? super R> s, Context ctx) {
 
 		GroupJoinSubscription<TLeft, TRight, TLeftEnd, TRightEnd, R> parent =
 				new GroupJoinSubscription<>(s,
@@ -106,11 +108,11 @@ final class FluxGroupJoin<TLeft, TRight, TLeftEnd, TRightEnd, R>
 		LeftRightSubscriber right = new LeftRightSubscriber(parent, false);
 		parent.cancellations.add(right);
 
-		source.subscribe(left);
+		source.subscribe(left, ctx);
 		other.subscribe(right);
 	}
 
-	interface JoinSupport {
+	interface JoinSupport extends ContextRelay {
 
 		void innerError(Throwable ex);
 
@@ -124,7 +126,8 @@ final class FluxGroupJoin<TLeft, TRight, TLeftEnd, TRightEnd, R>
 	}
 
 	static final class GroupJoinSubscription<TLeft, TRight, TLeftEnd, TRightEnd, R>
-			implements JoinSupport, InnerProducer<R> {
+			extends CachedContextProducer<R>
+			implements JoinSupport {
 
 		final Queue<Object>               queue;
 		final BiPredicate<Object, Object> queueBiOffer;
@@ -142,18 +145,12 @@ final class FluxGroupJoin<TLeft, TRight, TLeftEnd, TRightEnd, R>
 		final BiFunction<? super TLeft, ? super Flux<TRight>, ? extends R> resultSelector;
 
 		final Supplier<? extends Queue<TRight>> processorQueueSupplier;
-		final Subscriber<? super R>             actual;
 
 		int leftIndex;
 
 		int rightIndex;
 
 		volatile int wip;
-
-		@Override
-		public final Subscriber<? super R> actual() {
-			return actual;
-		}
 
 		static final AtomicIntegerFieldUpdater<GroupJoinSubscription> WIP =
 				AtomicIntegerFieldUpdater.newUpdater(GroupJoinSubscription.class, "wip");
@@ -195,7 +192,7 @@ final class FluxGroupJoin<TLeft, TRight, TLeftEnd, TRightEnd, R>
 				Queue<Object> queue,
 				Supplier<? extends
 						Queue<TRight>> processorQueueSupplier) {
-			this.actual = actual;
+			super(actual);
 			this.cancellations = new OpenHashSet<>();
 			this.queue = queue;
 			this.processorQueueSupplier = processorQueueSupplier;
@@ -233,7 +230,7 @@ final class FluxGroupJoin<TLeft, TRight, TLeftEnd, TRightEnd, R>
 				case ERROR:
 					return error;
 			}
-			return InnerProducer.super.scan(key);
+			return super.scan(key);
 		}
 
 		@Override
@@ -553,6 +550,13 @@ final class FluxGroupJoin<TLeft, TRight, TLeftEnd, TRightEnd, R>
 		}
 
 		@Override
+		public void onContext(Context context) {
+			if(isLeft){
+				parent.onContext(context);
+			}
+		}
+
+		@Override
 		public Object scan(Attr key) {
 			switch (key){
 				case PARENT:
@@ -675,6 +679,11 @@ final class FluxGroupJoin<TLeft, TRight, TLeftEnd, TRightEnd, R>
 		@Override
 		public void onComplete() {
 			parent.innerClose(isLeft, this);
+		}
+
+		@Override
+		public Context currentContext() {
+			return parent.currentContext();
 		}
 
 	}

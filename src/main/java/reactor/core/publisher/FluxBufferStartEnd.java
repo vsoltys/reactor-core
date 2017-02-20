@@ -33,6 +33,7 @@ import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Exceptions;
+import reactor.util.context.Context;
 
 
 /**
@@ -47,7 +48,7 @@ import reactor.core.Exceptions;
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
 final class FluxBufferStartEnd<T, U, V, C extends Collection<? super T>>
-		extends FluxSource<T, C> {
+		extends FluxOperator<T, C> {
 
 	final Publisher<U> start;
 
@@ -75,7 +76,7 @@ final class FluxBufferStartEnd<T, U, V, C extends Collection<? super T>>
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super C> s) {
+	public void subscribe(Subscriber<? super C> s, Context ctx) {
 
 		Queue<C> q = queueSupplier.get();
 
@@ -86,17 +87,17 @@ final class FluxBufferStartEnd<T, U, V, C extends Collection<? super T>>
 
 		start.subscribe(parent.starter);
 
-		source.subscribe(parent);
+		source.subscribe(parent, ctx);
 	}
 
 	static final class BufferStartEndMainSubscriber<T, U, V, C extends Collection<? super T>>
+			extends CachedContextProducer<C>
 			implements InnerOperator<T, C> {
 		final Supplier<C> bufferSupplier;
 
 		final Queue<C> queue;
 
 		final Function<? super U, ? extends Publisher<V>> end;
-		final Subscriber<? super C>                       actual;
 
 		Set<Subscription> endSubscriptions;
 
@@ -105,11 +106,6 @@ final class FluxBufferStartEnd<T, U, V, C extends Collection<? super T>>
 		Map<Long, C> buffers;
 
 		volatile Subscription s;
-
-		@Override
-		public final Subscriber<? super C> actual() {
-			return actual;
-		}
 
 		@SuppressWarnings("rawtypes")
 		static final AtomicReferenceFieldUpdater<BufferStartEndMainSubscriber, Subscription>
@@ -154,7 +150,7 @@ final class FluxBufferStartEnd<T, U, V, C extends Collection<? super T>>
 				Supplier<C> bufferSupplier,
 				Queue<C> queue,
 				Function<? super U, ? extends Publisher<V>> end) {
-			this.actual = actual;
+			super(actual);
 			this.bufferSupplier = bufferSupplier;
 			this.buffers = new HashMap<>();
 			this.endSubscriptions = new HashSet<>();
@@ -528,6 +524,11 @@ final class FluxBufferStartEnd<T, U, V, C extends Collection<? super T>>
 		}
 
 		@Override
+		public Context currentContext() {
+			return main.currentContext();
+		}
+
+		@Override
 		public Object scan(Attr key) {
 			if (key == Attr.ACTUAL) {
 				return main;
@@ -551,6 +552,11 @@ final class FluxBufferStartEnd<T, U, V, C extends Collection<? super T>>
 			this.main = main;
 			this.buffer = buffer;
 			this.index = index;
+		}
+
+		@Override
+		public Context currentContext() {
+			return main.currentContext();
 		}
 
 		@Override

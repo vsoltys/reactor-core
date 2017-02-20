@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *        http://www.apache.org/licenses/LICENSE-2.0
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,6 +26,7 @@ import org.reactivestreams.*;
 import reactor.core.Exceptions;
 import reactor.core.Scannable;
 import reactor.util.concurrent.QueueSupplier;
+import reactor.util.context.Context;
 
 /**
  * Maps each upstream value into a single {@code true} or {@code false} value provided by
@@ -41,13 +42,13 @@ import reactor.util.concurrent.QueueSupplier;
  * @author Simon Baslé
  */
 //adapted from RxJava2Extensions: https://github.com/akarnokd/RxJava2Extensions/blob/master/src/main/java/hu/akarnokd/rxjava2/operators/FlowableFilterAsync.java
-class FluxFilterWhen<T> extends FluxSource<T, T> {
+class FluxFilterWhen<T> extends FluxOperator<T, T> {
 
 	final Function<? super T, ? extends Publisher<Boolean>> asyncPredicate;
 
 	final int bufferSize;
 
-	FluxFilterWhen(Publisher<T> source,
+	FluxFilterWhen(Flux<T> source,
 			Function<? super T, ? extends Publisher<Boolean>> asyncPredicate,
 			int bufferSize) {
 		super(source);
@@ -56,13 +57,15 @@ class FluxFilterWhen<T> extends FluxSource<T, T> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
-		source.subscribe(new FluxFilterWhenSubscriber<>(s, asyncPredicate, bufferSize));
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
+		source.subscribe(new FluxFilterWhenSubscriber<>(s, asyncPredicate, bufferSize,
+				ctx), ctx);
 	}
 
-	static final class FluxFilterWhenSubscriber<T> implements InnerOperator<T, T> {
+	static final class FluxFilterWhenSubscriber<T>
+			extends CachedContextProducer<T>
+			implements InnerOperator<T, T> {
 
-		final Subscriber<? super T>                             actual;
 		final Function<? super T, ? extends Publisher<Boolean>> asyncPredicate;
 		final int                                               bufferSize;
 		final AtomicReferenceArray<T>                           toFilter;
@@ -98,9 +101,10 @@ class FluxFilterWhen<T> extends FluxSource<T, T> {
 
 		FluxFilterWhenSubscriber(Subscriber<? super T> actual,
 				Function<? super T, ? extends Publisher<Boolean>> asyncPredicate,
-				int bufferSize) {
+				int bufferSize, Context context) {
+			super(actual);
+			this.context = context;
 			this.toFilter = new AtomicReferenceArray<>(QueueSupplier.ceilingNextPowerOfTwo(bufferSize));
-			this.actual = actual;
 			this.asyncPredicate = asyncPredicate;
 			this.bufferSize = bufferSize;
 		}
@@ -326,29 +330,24 @@ class FluxFilterWhen<T> extends FluxSource<T, T> {
 			}
 		}
 
-		public void innerResult(Boolean item) {
+		void innerResult(Boolean item) {
 			innerResult = item;
 			state = STATE_RESULT;
 			clearCurrent();
 			drain();
 		}
 
-		public void innerError(Throwable ex) {
+		void innerError(Throwable ex) {
 			Exceptions.addThrowable(ERROR, this, ex);
 			state = STATE_RESULT;
 			clearCurrent();
 			drain();
 		}
 
-		public void innerComplete() {
+		void innerComplete() {
 			state = STATE_RESULT;
 			clearCurrent();
 			drain();
-		}
-
-		@Override
-		public Subscriber<? super T> actual() {
-			return actual;
 		}
 
 		@Override
@@ -398,6 +397,11 @@ class FluxFilterWhen<T> extends FluxSource<T, T> {
 		FilterWhenInner(FluxFilterWhenSubscriber<?> parent, boolean cancelOnNext) {
 			this.parent = parent;
 			this.cancelOnNext = cancelOnNext;
+		}
+
+		@Override
+		public Context currentContext() {
+			return parent.currentContext();
 		}
 
 		@Override

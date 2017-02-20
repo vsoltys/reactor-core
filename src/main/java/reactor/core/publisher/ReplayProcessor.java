@@ -28,9 +28,11 @@ import org.reactivestreams.Subscription;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable;
 import reactor.core.Scannable;
+import reactor.core.scheduler.Schedulers;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.concurrent.QueueSupplier;
+import reactor.util.context.Context;
 
 import static reactor.core.publisher.FluxReplay.ReplaySubscriber.EMPTY;
 import static reactor.core.publisher.FluxReplay.ReplaySubscriber.TERMINATED;
@@ -303,7 +305,7 @@ public final class ReplayProcessor<T> extends FluxProcessor<T, T>
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
 		if (s == null) {
 			throw Exceptions.argumentIsNullException();
 		}

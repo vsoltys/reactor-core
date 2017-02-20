@@ -27,7 +27,7 @@ import java.util.stream.Stream;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Scannable;
-
+import reactor.util.context.Context;
 
 /**
  * Given sorted rail sequences (according to the provided comparator) as List
@@ -55,12 +55,12 @@ final class ParallelMergeSort<T> extends Flux<T> implements Scannable {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
 		MergeSortMain<T> parent =
-				new MergeSortMain<>(s, source.parallelism(), comparator);
+				new MergeSortMain<>(ctx, s, source.parallelism(), comparator);
 		s.onSubscribe(parent);
 
-		source.subscribe(parent.subscribers);
+		source.subscribe(parent.subscribers, ctx);
 	}
 
 	@Override
@@ -74,8 +74,7 @@ final class ParallelMergeSort<T> extends Flux<T> implements Scannable {
 		return null;
 	}
 
-	static final class MergeSortMain<T>
-			implements InnerProducer<T> {
+	static final class MergeSortMain<T> extends CachedContextProducer<T> {
 
 		final MergeSortInner<T>[] subscribers;
 
@@ -84,14 +83,8 @@ final class ParallelMergeSort<T> extends Flux<T> implements Scannable {
 		final int[] indexes;
 
 		final Comparator<? super T> comparator;
-		final Subscriber<? super T> actual;
 
 		volatile int wip;
-
-		@Override
-		public final Subscriber<? super T> actual() {
-			return actual;
-		}
 
 		@SuppressWarnings("rawtypes")
 		static final AtomicIntegerFieldUpdater<MergeSortMain> WIP =
@@ -120,11 +113,11 @@ final class ParallelMergeSort<T> extends Flux<T> implements Scannable {
 						"error");
 
 		@SuppressWarnings("unchecked")
-		MergeSortMain(Subscriber<? super T> actual,
+		MergeSortMain(Context ctx, Subscriber<? super T> actual,
 				int n,
 				Comparator<? super T> comparator) {
-			this.actual = actual;
-
+			super(actual);
+			this.context = ctx;
 			this.comparator = comparator;
 
 			MergeSortInner<T>[] s = new MergeSortInner[n];
@@ -150,7 +143,7 @@ final class ParallelMergeSort<T> extends Flux<T> implements Scannable {
 				case BUFFERED:
 					return subscribers.length - remaining;
 			}
-			return InnerProducer.super.scan(key);
+			return super.scan(key);
 		}
 
 		@Override
@@ -332,6 +325,11 @@ final class ParallelMergeSort<T> extends Flux<T> implements Scannable {
 		MergeSortInner(MergeSortMain<T> parent, int index) {
 			this.parent = parent;
 			this.index = index;
+		}
+
+		@Override
+		public Context currentContext() {
+			return parent.currentContext();
 		}
 
 		@Override

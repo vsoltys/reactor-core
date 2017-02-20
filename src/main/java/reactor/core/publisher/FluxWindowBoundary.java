@@ -29,7 +29,7 @@ import org.reactivestreams.Subscription;
 import reactor.core.Disposable;
 import reactor.core.Exceptions;
 import reactor.core.Scannable;
-
+import reactor.util.context.Context;
 
 /**
  * Splits the source sequence into continuous, non-overlapping windowEnds 
@@ -39,7 +39,7 @@ import reactor.core.Scannable;
  * @param <U> the boundary publisher's type (irrelevant)
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxWindowBoundary<T, U> extends FluxSource<T, Flux<T>> {
+final class FluxWindowBoundary<T, U> extends FluxOperator<T, Flux<T>> {
 
 	final Publisher<U> other;
 
@@ -62,7 +62,7 @@ final class FluxWindowBoundary<T, U> extends FluxSource<T, Flux<T>> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super Flux<T>> s) {
+	public void subscribe(Subscriber<? super Flux<T>> s, Context ctx) {
 		WindowBoundaryMain<T, U> main = new WindowBoundaryMain<>(s,
 				processorQueueSupplier, processorQueueSupplier.get(), drainQueueSupplier.get());
 
@@ -71,11 +71,12 @@ final class FluxWindowBoundary<T, U> extends FluxSource<T, Flux<T>> {
 		if (main.emit(main.window)) {
 			other.subscribe(main.boundary);
 
-			source.subscribe(main);
+			source.subscribe(main, ctx);
 		}
 	}
 
 	static final class WindowBoundaryMain<T, U>
+			extends CachedContextProducer<Flux<T>>
 			implements InnerOperator<T, Flux<T>>, Disposable {
 
 		final Supplier<? extends Queue<T>> processorQueueSupplier;
@@ -83,16 +84,10 @@ final class FluxWindowBoundary<T, U> extends FluxSource<T, Flux<T>> {
 		final WindowBoundaryOther<U> boundary;
 
 		final Queue<Object>               queue;
-		final Subscriber<? super Flux<T>> actual;
 
 		UnicastProcessor<T> window;
 
 		volatile Subscription s;
-
-		@Override
-		public final Subscriber<? super Flux<T>> actual() {
-			return actual;
-		}
 
 		@SuppressWarnings("rawtypes")
 		static final AtomicReferenceFieldUpdater<WindowBoundaryMain, Subscription> S =
@@ -130,7 +125,7 @@ final class FluxWindowBoundary<T, U> extends FluxSource<T, Flux<T>> {
 		WindowBoundaryMain(Subscriber<? super Flux<T>> actual,
 				Supplier<? extends Queue<T>> processorQueueSupplier,
 				Queue<T> processorQueue, Queue<Object> queue) {
-			this.actual = actual;
+			super(actual);
 			this.processorQueueSupplier = processorQueueSupplier;
 			this.window = new UnicastProcessor<>(processorQueue, this);
 			this.open = 2;
@@ -370,6 +365,11 @@ final class FluxWindowBoundary<T, U> extends FluxSource<T, Flux<T>> {
 			if (set(s)) {
 				s.request(Long.MAX_VALUE);
 			}
+		}
+
+		@Override
+		public Context currentContext() {
+			return main.currentContext();
 		}
 
 		@Override

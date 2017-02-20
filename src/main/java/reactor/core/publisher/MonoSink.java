@@ -15,9 +15,11 @@
  */
 package reactor.core.publisher;
 
+import java.util.function.Function;
 import java.util.function.LongConsumer;
 
 import reactor.core.Disposable;
+import reactor.util.context.Context;
 
 
 /**
@@ -33,6 +35,16 @@ public interface MonoSink<T> {
      * terminating methods has no effect.
      */
     void success();
+
+	/**
+	 * Immediately propagate a {@link Context} to the child {@link Subscriber} given an
+	 * eventually non empty parent {@link Context}.
+	 *
+	 * @param doOnContext a {@link Function} given the parent context and producing a
+	 * new one to be pushed
+	 * @return this sink
+	 */
+	MonoSink<T> contextualize(Function<Context, Context> doOnContext);
 
     /**
      * Complete with the given value.

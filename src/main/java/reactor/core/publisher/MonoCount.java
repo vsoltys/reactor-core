@@ -18,6 +18,7 @@ package reactor.core.publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Fuseable;
+import reactor.util.context.Context;
 
 /**
  * Counts the number of values in the source sequence.
@@ -26,15 +27,15 @@ import reactor.core.Fuseable;
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  *
  */
-final class MonoCount<T> extends MonoSource<T, Long> implements Fuseable {
+final class MonoCount<T> extends MonoOperator<T, Long> implements Fuseable {
 
 	MonoCount(Flux<? extends T> source) {
 		super(source);
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super Long> s) {
-		source.subscribe(new CountSubscriber<>(s));
+	public void subscribe(Subscriber<? super Long> s, Context ctx) {
+		source.subscribe(new CountSubscriber<>(s), ctx);
 	}
 
 	static final class CountSubscriber<T> extends Operators.MonoSubscriber<T, Long>  {

@@ -30,6 +30,7 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable.ConditionalSubscriber;
+import reactor.util.context.Context;
 
 /**
  * Buffers elements into custom collections where the buffer boundary is determined by
@@ -49,7 +50,7 @@ import reactor.core.Fuseable.ConditionalSubscriber;
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
 final class FluxBufferPredicate<T, C extends Collection<? super T>>
-		extends FluxSource<T, C> {
+		extends FluxOperator<T, C> {
 
 	public enum Mode {
 		UNTIL, UNTIL_CUT_BEFORE, WHILE
@@ -75,7 +76,7 @@ final class FluxBufferPredicate<T, C extends Collection<? super T>>
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super C> s) {
+	public void subscribe(Subscriber<? super C> s, Context ctx) {
 		C initialBuffer;
 
 		try {
@@ -90,7 +91,7 @@ final class FluxBufferPredicate<T, C extends Collection<? super T>>
 		BufferPredicateSubscriber<T, C> parent = new BufferPredicateSubscriber<>(s,
 				initialBuffer, bufferSupplier, predicate, mode);
 
-		source.subscribe(parent);
+		source.subscribe(parent, ctx);
 	}
 
 	static final class BufferPredicateSubscriber<T, C extends Collection<? super T>>

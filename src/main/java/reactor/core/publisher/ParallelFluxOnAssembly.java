@@ -20,6 +20,7 @@ import org.reactivestreams.Subscriber;
 import reactor.core.Fuseable;
 import reactor.core.Scannable;
 import reactor.core.publisher.FluxOnAssembly.AssemblySnapshotException;
+import reactor.util.context.Context;
 
 /**
  * Captures the current stacktrace when this connectable publisher is created and makes it
@@ -69,7 +70,7 @@ final class ParallelFluxOnAssembly<T> extends ParallelFlux<T>
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public void subscribe(Subscriber<? super T>[] subscribers) {
+	public void subscribe(Subscriber<? super T>[] subscribers, Context ctx) {
 		if (!validate(subscribers)) {
 			return;
 		}
@@ -93,7 +94,7 @@ final class ParallelFluxOnAssembly<T> extends ParallelFlux<T>
 			parents[i] = s;
 		}
 
-		source.subscribe(parents);
+		source.subscribe(parents, ctx);
 	}
 
 	@Override

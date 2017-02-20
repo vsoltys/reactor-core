@@ -32,6 +32,7 @@ import reactor.core.Disposable;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable;
 import reactor.core.Scannable;
+import reactor.util.context.Context;
 
 /**
  * A connectable publisher which shares an underlying source and dispatches source values
@@ -100,7 +101,7 @@ final class FluxPublish<T> extends ConnectableFlux<T> implements Scannable {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
 		PublishInner<T> inner = new PublishInner<>(s);
 		s.onSubscribe(inner);
 		for (; ; ) {

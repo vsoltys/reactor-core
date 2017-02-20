@@ -24,7 +24,7 @@ import java.util.function.Consumer;
 import org.reactivestreams.Subscriber;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable;
-
+import reactor.util.context.Context;
 
 /**
  * Generate signals one-by-one via a function callback.
@@ -70,7 +70,7 @@ extends Flux<T> implements Fuseable {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
+	public void subscribe(Subscriber<? super T> s, Context context) {
 		S state;
 
 		try {

@@ -332,6 +332,25 @@ public class HooksTest {
 	}
 
 	@Test
+	public void testOnSubscriber() throws Exception {
+		List<Subscriber> l = new ArrayList<>();
+		Hooks.onSubscriber((s, c) -> {
+			l.add(s);
+			return s;
+		});
+		StepVerifier.create(Flux.just(1, 2, 3)
+		                        .map(m -> m)
+		                        .takeUntilOther(Mono.never())
+		                        .flatMap(d -> Mono.just(d).hide()))
+		            .expectNext(1, 2, 3)
+		            .verifyComplete();
+
+		Hooks.resetOnSubscriber();
+
+		assertThat(l).hasSize(5);
+	}
+
+	@Test
 	public void testMultiReceiver() throws Exception {
 		Hooks.onOperator(hooks -> hooks.operatorStacktrace());
 		try {

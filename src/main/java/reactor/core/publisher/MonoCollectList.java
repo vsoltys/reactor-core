@@ -23,6 +23,7 @@ import java.util.function.Supplier;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Fuseable;
+import reactor.util.context.Context;
 
 /**
  * Buffers all values from the source Publisher and emits it as a single Collection.
@@ -30,7 +31,7 @@ import reactor.core.Fuseable;
  * @param <T> the source value type
  * @param <C> the collection type that takes any supertype of T
  */
-final class MonoCollectList<T, C extends Collection<? super T>> extends MonoSource<T, C>
+final class MonoCollectList<T, C extends Collection<? super T>> extends MonoOperator<T, C>
 		implements Fuseable {
 
 	final Supplier<C> collectionSupplier;
@@ -42,7 +43,7 @@ final class MonoCollectList<T, C extends Collection<? super T>> extends MonoSour
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super C> s) {
+	public void subscribe(Subscriber<? super C> s, Context ctx) {
 		C collection;
 
 		try {
@@ -54,7 +55,7 @@ final class MonoCollectList<T, C extends Collection<? super T>> extends MonoSour
 			return;
 		}
 
-		source.subscribe(new MonoBufferAllSubscriber<>(s, collection));
+		source.subscribe(new MonoBufferAllSubscriber<>(s, collection), ctx);
 	}
 
 	static final class MonoBufferAllSubscriber<T, C extends Collection<? super T>>

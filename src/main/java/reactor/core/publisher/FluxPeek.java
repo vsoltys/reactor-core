@@ -20,11 +20,11 @@ import java.util.function.LongConsumer;
 
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import reactor.util.context.ContextRelay;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable.ConditionalSubscriber;
 import reactor.core.publisher.FluxPeekFuseable.PeekConditionalSubscriber;
-
-
+import reactor.util.context.Context;
 
 /**
  * Peek into the lifecycle events and signals of a sequence.
@@ -38,7 +38,7 @@ import reactor.core.publisher.FluxPeekFuseable.PeekConditionalSubscriber;
  * @param <T> the value type
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxPeek<T> extends FluxSource<T, T> implements SignalPeek<T> {
+final class FluxPeek<T> extends FluxOperator<T, T> implements SignalPeek<T> {
 
 	final Consumer<? super Subscription> onSubscribeCall;
 
@@ -72,14 +72,14 @@ final class FluxPeek<T> extends FluxSource<T, T> implements SignalPeek<T> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
 		if (s instanceof ConditionalSubscriber) {
 			@SuppressWarnings("unchecked") // javac, give reason to suppress because inference anomalies
 					ConditionalSubscriber<T> s2 = (ConditionalSubscriber<T>) s;
-			source.subscribe(new PeekConditionalSubscriber<>(s2, this));
+			source.subscribe(new PeekConditionalSubscriber<>(s2, this), ctx);
 			return;
 		}
-		source.subscribe(new PeekSubscriber<>(s, this));
+		source.subscribe(new PeekSubscriber<>(s, this), ctx);
 	}
 
 	static final class PeekSubscriber<T> implements InnerOperator<T, T> {
@@ -106,6 +106,23 @@ final class FluxPeek<T> extends FluxSource<T, T> implements SignalPeek<T> {
 					return done;
 			}
 			return InnerOperator.super.scan(key);
+		}
+
+		@Override
+		public void onContext(Context context) {
+			if(parent.onContextPropagateCall() != null) {
+				parent.onContextPropagateCall().accept(context);
+			}
+			InnerOperator.super.onContext(context);
+		}
+
+		@Override
+		public Context currentContext() {
+			Context c = ContextRelay.getOrEmpty(actual);
+			if(!c.isEmpty() && parent.onContextParentCall() != null) {
+				parent.onContextParentCall().accept(c);
+			}
+			return c;
 		}
 
 		@Override

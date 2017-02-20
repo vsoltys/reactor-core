@@ -23,6 +23,7 @@ import java.util.function.Supplier;
 
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import reactor.util.context.Context;
 
 import static reactor.core.publisher.DrainUtils.COMPLETED_MASK;
 import static reactor.core.publisher.DrainUtils.REQUESTED_MASK;
@@ -45,7 +46,7 @@ import static reactor.core.publisher.DrainUtils.REQUESTED_MASK;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxScanSeed<T, R> extends FluxSource<T, R> {
+final class FluxScanSeed<T, R> extends FluxOperator<T, R> {
 
 	final BiFunction<R, ? super T, R> accumulator;
 
@@ -60,7 +61,7 @@ final class FluxScanSeed<T, R> extends FluxSource<T, R> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super R> s) {
+	public void subscribe(Subscriber<? super R> s, Context ctx) {
 		R initialValue;
 
 		try {
@@ -71,7 +72,7 @@ final class FluxScanSeed<T, R> extends FluxSource<T, R> {
 			Operators.error(s, Operators.onOperatorError(e));
 			return;
 		}
-		source.subscribe(new ScanSeedSubscriber<>(s, accumulator, initialValue));
+		source.subscribe(new ScanSeedSubscriber<>(s, accumulator, initialValue), ctx);
 	}
 
 	static final class ScanSeedSubscriber<T, R>

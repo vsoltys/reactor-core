@@ -18,6 +18,7 @@ package reactor.test.publisher;
 import org.reactivestreams.Subscriber;
 import reactor.core.Fuseable;
 import reactor.core.publisher.Flux;
+import reactor.util.context.Context;
 
 /**
  * @author Stephane Maldini
@@ -25,7 +26,7 @@ import reactor.core.publisher.Flux;
 final class FluxEmptySyncFuseable<T> extends Flux<T> implements Fuseable {
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
+	public void subscribe(Subscriber<? super T> s, Context c) {
 		s.onSubscribe(new SynchronousSubscription<T>() {
 			@Override
 			public T poll() {

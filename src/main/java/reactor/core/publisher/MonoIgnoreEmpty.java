@@ -15,9 +15,9 @@
  */
 package reactor.core.publisher;
 
-import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import reactor.util.context.Context;
 
 /**
  * Ignores normal values and passes only the terminal signals along.
@@ -25,15 +25,15 @@ import org.reactivestreams.Subscription;
  * @param <T> the value type
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class MonoIgnoreEmpty<T> extends MonoSource<T, T> {
+final class MonoIgnoreEmpty<T> extends MonoOperator<T, T> {
 
-	MonoIgnoreEmpty(Publisher<? extends T> source) {
+	MonoIgnoreEmpty(ContextualPublisher<? extends T> source) {
 		super(source);
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
-		source.subscribe(new IgnoreElementsSubscriber<>(s));
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
+		source.subscribe(new IgnoreElementsSubscriber<>(s), ctx);
 	}
 
 	static final class IgnoreElementsSubscriber<T> implements InnerOperator<T, T> {

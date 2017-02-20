@@ -27,7 +27,7 @@ import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Scannable;
-
+import reactor.util.context.Context;
 
 /**
  * Waits for all Mono sources to produce a value or terminate, and if
@@ -95,7 +95,7 @@ final class MonoWhen<T, R> extends Mono<R> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void subscribe(Subscriber<? super R> s) {
+    public void subscribe(Subscriber<? super R> s, Context context) {
 	    Publisher<?>[] a;
 	    int n = 0;
         if (sources != null) {
@@ -119,7 +119,7 @@ final class MonoWhen<T, R> extends Mono<R> {
         }
 
 	    WhenCoordinator<R> parent =
-			    new WhenCoordinator<>(s, n, delayError, zipper);
+			    new WhenCoordinator<>(s, n, delayError, zipper, context);
 	    s.onSubscribe(parent);
         parent.subscribe(a);
     }
@@ -133,6 +133,8 @@ final class MonoWhen<T, R> extends Mono<R> {
 
 		final Function<? super Object[], ? extends R> zipper;
 
+		final Context context;
+
 		volatile int done;
         @SuppressWarnings("rawtypes")
         static final AtomicIntegerFieldUpdater<WhenCoordinator> DONE =
@@ -142,9 +144,10 @@ final class MonoWhen<T, R> extends Mono<R> {
         WhenCoordinator(Subscriber<? super R> subscriber,
 		        int n,
 		        boolean delayError,
-		        Function<? super Object[], ? extends R> zipper) {
+		        Function<? super Object[], ? extends R> zipper,
+                Context context) {
 	        super(subscriber);
-
+	        this.context = context;
             this.delayError = delayError;
 	        this.zipper = zipper;
 	        subscribers = new WhenInner[n];
@@ -290,6 +293,11 @@ final class MonoWhen<T, R> extends Mono<R> {
 					return error;
 			}
 			return null;
+		}
+
+		@Override
+		public Context currentContext() {
+			return parent.context;
 		}
 
 		@Override

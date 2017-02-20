@@ -22,6 +22,7 @@ import java.util.function.Supplier;
 
 import org.reactivestreams.Subscriber;
 import reactor.core.scheduler.Scheduler;
+import reactor.util.context.Context;
 
 /**
  * @author Stephane Maldini
@@ -40,12 +41,12 @@ final class FluxBufferTimeOrSize<T, C extends Collection<? super T>> extends Flu
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super C> subscriber) {
+	public void subscribe(Subscriber<? super C> subscriber, Context ctx) {
 		source.subscribe(new BufferTimeoutSubscriber<>(prepareSub(subscriber),
 				batchSize,
 				timespan,
 				timer.createWorker(),
-				bufferSupplier));
+				bufferSupplier), ctx);
 	}
 
 	final static class BufferTimeoutSubscriber<T, C extends Collection<? super T>> extends

@@ -31,8 +31,8 @@ import org.reactivestreams.Subscription;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable;
 import reactor.core.Scannable;
-
-
+import reactor.util.context.Context;
+import reactor.util.context.ContextRelay;
 
 /**
  * Shares a sequence for the duration of a function that may transform it and
@@ -44,7 +44,7 @@ import reactor.core.Scannable;
  *
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxPublishMulticast<T, R> extends FluxSource<T, R> implements Fuseable {
+final class FluxPublishMulticast<T, R> extends FluxOperator<T, R> implements Fuseable {
 
 	final Function<? super Flux<T>, ? extends Publisher<? extends R>> transform;
 
@@ -52,7 +52,7 @@ final class FluxPublishMulticast<T, R> extends FluxSource<T, R> implements Fusea
 
 	final int prefetch;
 
-	FluxPublishMulticast(Publisher<? extends T> source,
+	FluxPublishMulticast(ContextualPublisher<? extends T> source,
 			Function<? super Flux<T>, ? extends Publisher<? extends R>> transform,
 			int prefetch,
 			Supplier<? extends Queue<T>> queueSupplier) {
@@ -71,10 +71,10 @@ final class FluxPublishMulticast<T, R> extends FluxSource<T, R> implements Fusea
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super R> s) {
+	public void subscribe(Subscriber<? super R> s, Context ctx) {
 
 		FluxPublishMulticaster<T, R> multicast =
-				new FluxPublishMulticaster<>(prefetch, queueSupplier);
+				new FluxPublishMulticaster<>(prefetch, queueSupplier, ctx);
 
 		Publisher<? extends R> out;
 
@@ -94,7 +94,7 @@ final class FluxPublishMulticast<T, R> extends FluxSource<T, R> implements Fusea
 			out.subscribe(new CancelMulticaster<>(s, multicast));
 		}
 
-		source.subscribe(multicast);
+		source.subscribe(multicast, ctx);
 	}
 
 	static final class FluxPublishMulticaster<T, R> extends Flux<T>
@@ -143,18 +143,20 @@ final class FluxPublishMulticast<T, R> extends FluxSource<T, R> implements Fusea
 
 		Throwable error;
 
+		final Context context;
+
 		int produced;
 
 		int sourceMode;
 
 		@SuppressWarnings("unchecked")
 		FluxPublishMulticaster(int prefetch, Supplier<? extends Queue<T>>
-				queueSupplier) {
+				queueSupplier, Context ctx) {
 			this.prefetch = prefetch;
 			this.limit = prefetch - (prefetch >> 2);
 			this.queueSupplier = queueSupplier;
 			this.subscribers = EMPTY;
-
+			this.context = ctx;
 		}
 
 		@Override
@@ -182,11 +184,17 @@ final class FluxPublishMulticast<T, R> extends FluxSource<T, R> implements Fusea
 		}
 
 		@Override
-		public void subscribe(Subscriber<? super T> s) {
+		public Context currentContext() {
+			return context;
+		}
+
+		@Override
+		public void subscribe(Subscriber<? super T> s, Context ctx) {
 			PublishMulticastInner<T> pcs = new PublishMulticastInner<>(this, s);
 			s.onSubscribe(pcs);
 
 			if (add(pcs)) {
+				ContextRelay.set(s, context);
 				if (pcs.once != 0) {
 					removeAndDrain(pcs);
 				}

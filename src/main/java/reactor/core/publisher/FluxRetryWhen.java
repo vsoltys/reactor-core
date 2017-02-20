@@ -24,8 +24,8 @@ import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.Scannable;
-
-
+import reactor.util.context.Context;
+import reactor.util.context.ContextRelay;
 
 /**
  * retries a source when a companion sequence signals
@@ -37,7 +37,7 @@ import reactor.core.Scannable;
  * @param <T> the source value type
  * @see <a href="https://github.com/reactor/reactive-streams-commons">Reactive-Streams-Commons</a>
  */
-final class FluxRetryWhen<T> extends FluxSource<T, T> {
+final class FluxRetryWhen<T> extends FluxOperator<T, T> {
 
 	final Function<? super Flux<Throwable>, ? extends Publisher<?>> whenSourceFactory;
 
@@ -50,7 +50,7 @@ final class FluxRetryWhen<T> extends FluxSource<T, T> {
 	static <T> void subscribe(Subscriber<? super T> s, Function<? super
 			Flux<Throwable>, ?
 			extends Publisher<?>> whenSourceFactory, Publisher<? extends
-			T> source) {
+			T> source, Context ctx) {
 		RetryWhenOtherSubscriber other = new RetryWhenOtherSubscriber();
 		Subscriber<Throwable> signaller = Operators.serialize(other.completionSignal);
 
@@ -59,7 +59,7 @@ final class FluxRetryWhen<T> extends FluxSource<T, T> {
 		Subscriber<T> serial = Operators.serialize(s);
 
 		RetryWhenMainSubscriber<T> main =
-				new RetryWhenMainSubscriber<>(serial, signaller, source);
+				new RetryWhenMainSubscriber<>(serial, signaller, source, ctx);
 		other.main = main;
 
 		serial.onSubscribe(main);
@@ -83,8 +83,8 @@ final class FluxRetryWhen<T> extends FluxSource<T, T> {
 	}
 
 	@Override
-	public void subscribe(Subscriber<? super T> s) {
-		subscribe(s, whenSourceFactory, source);
+	public void subscribe(Subscriber<? super T> s, Context ctx) {
+		subscribe(s, whenSourceFactory, source, ctx);
 	}
 
 	static final class RetryWhenMainSubscriber<T> extends
@@ -106,8 +106,8 @@ final class FluxRetryWhen<T> extends FluxSource<T, T> {
 		long produced;
 		
 		RetryWhenMainSubscriber(Subscriber<? super T> actual, Subscriber<Throwable> signaller,
-												Publisher<? extends T> source) {
-			super(actual);
+												Publisher<? extends T> source, Context ctx) {
+			super(actual, ctx);
 			this.signaller = signaller;
 			this.source = source;
 			this.otherArbiter = new Operators.DeferredSubscription();
@@ -208,6 +208,11 @@ final class FluxRetryWhen<T> extends FluxSource<T, T> {
 		final DirectProcessor<Throwable> completionSignal = new DirectProcessor<>();
 
 		@Override
+		public Context currentContext() {
+			return main.context;
+		}
+
+		@Override
 		public Object scan(Attr key) {
 			switch (key){
 				case PARENT:
@@ -239,7 +244,8 @@ final class FluxRetryWhen<T> extends FluxSource<T, T> {
 		}
 
 		@Override
-		public void subscribe(Subscriber<? super Throwable> s) {
+		public void subscribe(Subscriber<? super Throwable> s, Context ctx) {
+			ContextRelay.set(s, main.context);
 			completionSignal.subscribe(s);
 		}
 	}
