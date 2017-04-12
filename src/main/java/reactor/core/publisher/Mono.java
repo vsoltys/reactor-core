@@ -61,7 +61,7 @@ import reactor.util.function.Tuples;
  *
  * <p>The rx operators will offer aliases for input {@link Mono} type to preserve the "at most one"
  * property of the resulting {@link Mono}. For instance {@link Mono#flatMap flatMap} returns a
- * {@link Mono}, while there is a {@link Mono#flatMapMany} alias with possibly more than 1 emission.
+ * {@link Mono}, while there is a {@link Mono#flatMapMany flatMapMany} alias with possibly more than 1 emission.
  *
  * <p>{@code Mono<Void>} should be used for {@link Publisher} that just completes without any value.
  *
@@ -76,6 +76,7 @@ import reactor.util.function.Tuples;
  * @author Sebastien Deleuze
  * @author Stephane Maldini
  * @author David Karnok
+ * @author Simon Baslé
  *
  * @see Flux
  */
@@ -95,8 +96,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	 * <p>
 	 * <b>1) addListener/removeListener pairs</b><br>
 	 * To work with such API one has to instantiate the listener,
-	 * wire up the SingleEmitter inside it then add the listener
-	 * to the source:
+	 * call the sink from the listener then register it with the source:
 	 * <pre><code>
 	 * Mono.&lt;String&gt;create(sink -&gt; {
 	 *     HttpListener listener = event -&gt; {
@@ -181,7 +181,8 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Create a Mono which delays an onNext signal of {@code duration} of given unit and complete on the global timer.
+	 * Create a Mono which delays an onNext signal by a given {@link Duration duration}
+	 * on a default Scheduler and completes.
 	 * If the demand cannot be produced in time, an onError will be signalled instead.
 	 * The delay is introduced through the {@link Schedulers#parallel() parallel} default Scheduler.
 	 *
@@ -197,7 +198,8 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Create a Mono which delays an onNext signal by a given {@code duration} and completes.
+	 * Create a Mono which delays an onNext signal by a given {@link Duration duration}
+	 * on a provided {@link Scheduler} and completes.
 	 * If the demand cannot be produced in time, an onError will be signalled instead.
 	 *
 	 * <p>
@@ -211,7 +213,6 @@ public abstract class Mono<T> implements Publisher<T> {
 	public static Mono<Long> delay(Duration duration, Scheduler timer) {
 		return onAssembly(new MonoDelay(duration.toMillis(), TimeUnit.MILLISECONDS, timer));
 	}
-
 
 	/**
 	 * Create a {@link Mono} that completes without emitting any item.
@@ -228,7 +229,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Create a new {@link Mono} that ignores onNext (dropping them) and only react on Completion signal.
+	 * Create a new {@link Mono} that ignores onNext (dropping them) and only react to completion signal.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/thens.png" alt="">
@@ -260,7 +261,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Pick the first result coming from any of the given monos and populate a new {@literal Mono}.
+	 * Pick the first available result coming from any of the given monos and populate a new {@literal Mono}.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/first.png" alt="">
@@ -276,7 +277,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Pick the first result coming from any of the given monos and populate a new {@literal Mono}.
+	 * Pick the first available result coming from any of the given monos and populate a new {@literal Mono}.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/first.png" alt="">
@@ -319,7 +320,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Create a {@link Mono} producing the value for the {@link Mono} using the given supplier.
+	 * Create a {@link Mono} producing its value using the provided {@link Callable}.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/fromcallable.png" alt="">
@@ -334,7 +335,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Create a {@link Mono} producing the value for the {@link Mono} using the given {@link CompletionStage}.
+	 * Create a {@link Mono}, producing its value using the provided {@link CompletionStage}.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/fromfuture.png" alt="">
@@ -349,8 +350,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Unchecked cardinality conversion of {@link Publisher} as {@link Mono}, supporting
-	 * {@link Fuseable} sources.
+	 * Convert a {@link Publisher} to a {@link Mono} without any cardinality check
+	 * (ie this method doesn't check if the source is already a Mono, nor cancels the
+	 * source past the first element). Conversion supports {@link Fuseable} sources.
 	 *
 	 * @param source the {@link Publisher} to wrap
 	 * @param <I> input upstream type
@@ -364,7 +366,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Create a {@link Mono} producing the value for the {@link Mono} using the given {@link CompletableFuture}.
+	 * Create a {@link Mono}, producing its value using the provided {@link CompletableFuture}.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/fromfuture.png" alt="">
@@ -380,13 +382,13 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Create a {@link Mono} only producing a completion signal after using the given
-	 * runnable.
+	 * Create a {@link Mono} that completes empty once the provided {@link Runnable} has
+	 * been executed.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/fromrunnable.png" alt="">
 	 * <p>
-	 * @param runnable {@link Runnable} that will callback the completion signal
+	 * @param runnable {@link Runnable} that will be executed before emitting the completion signal
 	 *
 	 * @return A {@link Mono}.
 	 */
@@ -395,7 +397,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Create a {@link Mono} producing the value for the {@link Mono} using the given supplier.
+	 * Create a {@link Mono}, producing its value using the provided {@link Supplier}.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/fromsupplier.png" alt="">
@@ -411,12 +413,13 @@ public abstract class Mono<T> implements Publisher<T> {
 
 
 	/**
-	 * Create a new {@link Mono} that ignores onNext (dropping them) and only react on Completion signal.
+	 * Create a new {@link Mono} that ignores elements from the source (dropping them),
+	 * but completes when the source completes.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/ignoreelements.png" alt="">
 	 * <p>
-	 * @param source the {@link Publisher to ignore}
+	 * @param source the {@link Publisher} to ignore
 	 * @param <T> the source type of the ignored data
 	 *
 	 * @return a new completable {@link Mono}.
@@ -425,9 +428,9 @@ public abstract class Mono<T> implements Publisher<T> {
 		return onAssembly(new MonoIgnoreEmpty<>(source));
 	}
 
-
 	/**
-	 * Create a new {@link Mono} that emits the specified item.
+	 * Create a new {@link Mono} that emits the specified item, which is captured at
+	 * instantiation time.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/just.png" alt="">
@@ -475,7 +478,8 @@ public abstract class Mono<T> implements Publisher<T> {
 
 
 	/**
-	 * Return a {@link Mono} that will never signal any data, error or completion signal.
+	 * Return a {@link Mono} that will never signal any data, error or completion signal,
+	 * essentially running indefinitely.
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/never.png" alt="">
 	 * <p>
@@ -551,19 +555,18 @@ public abstract class Mono<T> implements Publisher<T> {
 	/**
 	 * Uses a resource, generated by a supplier for each individual Subscriber, while streaming the value from a
 	 * Mono derived from the same resource and makes sure the resource is released if the
-	 * sequence terminates or
-	 * the Subscriber cancels.
+	 * sequence terminates or the Subscriber cancels.
 	 * <p>
 	 * <ul> <li>Eager resource cleanup happens just before the source termination and exceptions raised by the cleanup
-	 * Consumer may override the terminal even.</li> <li>Non-eager cleanup will drop any exception.</li> </ul>
+	 * Consumer may override the terminal event.</li> <li>Non-eager cleanup will drop any exception.</li> </ul>
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/using.png"
 	 * alt="">
 	 *
-	 * @param resourceSupplier a {@link Callable} that is called on subscribe
-	 * @param sourceSupplier a {@link Mono} factory derived from the supplied resource
-	 * @param resourceCleanup invoked on completion
-	 * @param eager true to clean before terminating downstream subscribers
+	 * @param resourceSupplier a {@link Callable} that is called on subscribe to create the resource
+	 * @param sourceSupplier a {@link Mono} factory to create the Mono depending on the created resource
+	 * @param resourceCleanup invoked on completion to clean-up the resource
+	 * @param eager set to true to clean before terminating downstream subscribers
 	 * @param <T> emitted type
 	 * @param <D> resource type
 	 *
@@ -579,18 +582,17 @@ public abstract class Mono<T> implements Publisher<T> {
 	/**
 	 * Uses a resource, generated by a supplier for each individual Subscriber, while streaming the value from a
 	 * Mono derived from the same resource and makes sure the resource is released if the
-	 * sequence terminates or
-	 * the Subscriber cancels.
+	 * sequence terminates or the Subscriber cancels.
 	 * <p>
 	 * Eager resource cleanup happens just before the source termination and exceptions raised by the cleanup Consumer
-	 * may override the terminal even.
+	 * may override the terminal event.
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/using.png"
 	 * alt="">
 	 *
-	 * @param resourceSupplier a {@link Callable} that is called on subscribe
-	 * @param sourceSupplier a {@link Mono} factory derived from the supplied resource
-	 * @param resourceCleanup invoked on completion
+	 * @param resourceSupplier a {@link Callable} that is called on subscribe to create the resource
+	 * @param sourceSupplier a {@link Mono} factory to create the Mono depending on the created resource
+	 * @param resourceCleanup invoked on completion to clean-up the resource
 	 * @param <T> emitted type
 	 * @param <D> resource type
 	 *
@@ -603,8 +605,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Merge given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
-	 * have been fulfilled. An error will cause pending results to be cancelled and immediate error emission to the
+	 * Merge given monos into a new {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
+	 * have been fulfilled, aggregating their values into a {@link Tuple2}.
+	 * An error will cause pending results to be cancelled and immediate error emission to the
 	 * returned {@link Mono}.
 	 *
 	 * <p>
@@ -622,8 +625,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Merge given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
-	 * have been fulfilled. An error will cause pending results to be cancelled and immediate error emission to the
+	 * Merge given monos into a new {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
+	 * have been fulfilled, aggregating their values as defined by the combinator function.
+	 * An error will cause pending results to be cancelled and immediate error emission to the
 	 * returned {@link Mono}.
 	 *
 	 * <p>
@@ -645,8 +649,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Merge given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
-	 * have been fulfilled. An error will cause pending results to be cancelled and immediate error emission to the
+	 * Merge given monos into a new {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
+	 * have been fulfilled, aggregating their values into a {@link Tuple3}.
+	 * An error will cause pending results to be cancelled and immediate error emission to the
 	 * returned {@link Mono}.
 	 *
 	 * <p>
@@ -667,8 +672,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Merge given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
-	 * have been fulfilled. An error will cause pending results to be cancelled and immediate error emission to the
+	 * Merge given monos into a new {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
+	 * have been fulfilled, aggregating their values into a {@link Tuple4}.
+	 * An error will cause pending results to be cancelled and immediate error emission to the
 	 * returned {@link Mono}.
 	 *
 	 * <p>
@@ -694,8 +700,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Merge given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
-	 * have been fulfilled. An error will cause pending results to be cancelled and immediate error emission to the
+	 * Merge given monos into a new {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
+	 * have been fulfilled, aggregating their values into a {@link Tuple5}.
+	 * An error will cause pending results to be cancelled and immediate error emission to the
 	 * returned {@link Mono}.
 	 *
 	 * <p>
@@ -724,8 +731,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Merge given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
-	 * have been fulfilled. An error will cause pending results to be cancelled and immediate error emission to the
+	 * Merge given monos into a new {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
+	 * have been fulfilled, aggregating their values into a {@link Tuple6}.
+	 * An error will cause pending results to be cancelled and immediate error emission to the
 	 * returned {@link Mono}.
 	 *
 	 * <p>
@@ -757,9 +765,10 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Aggregate given void publishers into a new a {@literal Mono} that will be
-	 * fulfilled when all of the given {@literal
-	 * Monos} have been fulfilled. If any Mono terminates without value, the returned sequence will be terminated immediately and pending results cancelled.
+	 * Aggregate given void publishers into a new {@literal Mono} that will be
+	 * fulfilled when all of the given {@literal Publishers} have been fulfilled.
+	 * An error will cause pending results to be cancelled and immediate error emission
+	 * to the returned {@link Mono}.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/whent.png" alt="">
@@ -774,8 +783,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Aggregate given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal
-	 * Monos} have been fulfilled. If any Mono terminates without value, the returned sequence will be terminated immediately and pending results cancelled.
+	 * Aggregate given monos into a new {@literal Mono} that will be fulfilled when all of the given {@literal
+	 * Monos} have been fulfilled, aggregating their values according to the provided combinator function.
+	 * If any Mono terminates without value, the returned sequence will be terminated immediately and pending results cancelled.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/whent.png" alt="">
@@ -793,7 +803,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Aggregate given void publisher into a new a {@literal Mono} that will be fulfilled
+	 * Aggregate given void publishers into a new {@literal Mono} that will be fulfilled
 	 * when all of the given {@literal sources} have been fulfilled. An error will cause
 	 * pending results to be cancelled and immediate error emission to the returned {@link Mono}.
 	 * <p>
@@ -814,10 +824,10 @@ public abstract class Mono<T> implements Publisher<T> {
 		return onAssembly(new MonoWhen<>(false, VOID_FUNCTION, sources));
 	}
 
-
 	/**
-	 * Aggregate given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal
-	 * Monos} have been fulfilled. An error will cause pending results to be cancelled and immediate error emission to the
+	 * Aggregate given monos into a new {@literal Mono} that will be fulfilled when all of the given {@literal
+	 * Monos} have been fulfilled, aggregating their values according to the provided combinator function.
+	 * An error will cause pending results to be cancelled and immediate error emission to the
 	 * returned {@link Mono}.
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/whent.png" alt="">
@@ -840,8 +850,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Merge given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
-	 * have been fulfilled. If both Monos error, the two exceptions are combined (suppressed into a combining exception).
+	 * Merge given monos into a new {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
+	 * have been fulfilled, aggregating their values into a {@link Tuple2} and delaying errors.
+	 * If both Monos error, the two exceptions are combined (as suppressed exceptions on a root exception).
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/whent.png" alt="">
@@ -859,8 +870,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Merge given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal Mono Monos}
-	 * have been fulfilled. If several Monos error, the exceptions are combined (suppressed into a combining exception).
+	 * Merge given monos into a new {@literal Mono} that will be fulfilled when all of the given {@literal Mono Monos}
+	 * have been fulfilled, aggregating their values into a {@link Tuple3} and delaying errors.
+	 * If several Monos error, the two exceptions are combined (as suppressed exceptions on a root exception).
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/whent.png" alt="">
@@ -880,8 +892,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Merge given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
-	 * have been fulfilled. If several Monos error, the exceptions are combined (suppressed into a combining exception).
+	 * Merge given monos into a new {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
+	 * have been fulfilled, aggregating their values into a {@link Tuple4} and delaying errors.
+	 * If several Monos error, the exceptions are combined (as suppressed exceptions on a root exception).
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/whent.png" alt="">
@@ -906,9 +919,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Merge given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
-	 * have been fulfilled. If several Monos error, the exceptions are combined (suppressed into a combining exception).
-	 *
+	 * Merge given monos into a new {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
+	 * have been fulfilled, aggregating their values into a {@link Tuple5} and delaying errors.
+	 * If several Monos error, the exceptions are combined (as suppressed exceptions on a root exception).
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/whent.png" alt="">
 	 * <p>
@@ -935,8 +948,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Merge given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
-	 * have been fulfilled. If several Monos error, the exceptions are combined (suppressed into a combining exception).
+	 * Merge given monos into a new {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
+	 * have been fulfilled, aggregating their values into a {@link Tuple6} and delaying errors.
+	 * If several Monos error, the exceptions are combined (as suppressed exceptions on a root exception).
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/whent.png" alt="">
@@ -967,11 +981,11 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Aggregate given void publishers into a new a {@literal Mono} that will be
+	 * Aggregate given void publishers into a new {@literal Mono} that will be
 	 * fulfilled when all of the given {@literal sources} have been fulfilled. If any Publisher
 	 * terminates without value, the returned sequence will be terminated immediately and
-	 * pending results cancelled. If several Publishers error, the exceptions are combined
-	 * (suppressed into a combining exception).
+	 * pending results cancelled. Errors from the sources are delayed.
+	 * If several Publishers error, the exceptions are combined (as suppressed exceptions on a root exception).
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/whent.png" alt="">
@@ -986,10 +1000,10 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Aggregate given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal
+	 * Aggregate given monos into a new {@literal Mono} that will be fulfilled when all of the given {@literal
 	 * Monos} have been fulfilled. If any Mono terminates without value, the returned sequence will be terminated
-	 * immediately and pending results cancelled. If several Monos error, the exceptions are combined (suppressed
-	 * into a combining exception).
+	 * immediately and pending results cancelled. Errors from the sources are delayed.
+	 * If several Monos error, the exceptions are combined (as suppressed exceptions on a root exception).
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/whent.png" alt="">
@@ -1007,9 +1021,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Merge given void publishers into a new a {@literal Mono} that will be fulfilled when
-	 * all of the given {@literal sources} have been fulfilled. If several Publishers error,
-	 * the exceptions are combined (suppressed into a combining exception).
+	 * Merge given void publishers into a new {@literal Mono} that will be fulfilled when
+	 * all of the given {@literal sources} have been fulfilled. Errors from the sources are delayed.
+	 * If several Publishers error, the exceptions are combined (as suppressed exceptions on a root exception).
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/whent.png" alt="">
@@ -1031,8 +1045,10 @@ public abstract class Mono<T> implements Publisher<T> {
 
 
 	/**
-	 * Merge given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
-	 * have been fulfilled. If several Monos error, the exceptions are combined (suppressed into a combining exception).
+	 * Merge given monos into a new {@literal Mono} that will be fulfilled when all of the
+	 * given {@literal Monos} have been fulfilled, aggregating their values according to
+	 * the provided combinator function and delaying errors.
+	 * If several Monos error, the exceptions are combined (as suppressed exceptions on a root exception).
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/whent.png" alt="">
@@ -1056,8 +1072,11 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Aggregate given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal
-	 * Monos} have been fulfilled. If any Mono terminates without value, the returned sequence will be terminated immediately and pending results cancelled.
+	 * Zip the values from given monos together using a combinator function, producing a
+	 * new {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
+	 * have been fulfilled.
+	 * If any Mono terminates without value, the returned sequence will be terminated
+	 * immediately and pending results cancelled.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/zip1.png" alt="">
@@ -1075,8 +1094,10 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Aggregate given monos into a new a {@literal Mono} that will be fulfilled when all of the given {@literal
-	 * Monos} have been fulfilled. If any Mono terminates without value, the returned sequence will be terminated immediately and pending results cancelled.
+	 * Zip the values from given monos together using a combinator function, producing a
+	 * new {@literal Mono} that will be fulfilled when all of the given {@literal Monos}
+	 * have been fulfilled.
+	 * If any Mono terminates without value, the returned sequence will be terminated immediately and pending results cancelled.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/zip1.png" alt="">
@@ -1214,8 +1235,10 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Block until a next signal is received, will return null if onComplete, T if onNext, throw a
-	 * {@literal Exceptions.DownstreamException} if checked error or origin RuntimeException if unchecked.
+	 * Subscribe to this {@link Mono} and <strong>block indefinitely</strong> until a next signal is
+	 * received. Returns that value, or null if the Mono completes empty. In case the Mono
+	 * errors, the original exception is thrown (wrapped in a {@link RuntimeException} if
+	 * it was a checked exception).
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/block.png" alt="">
@@ -1230,11 +1253,13 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Block until a next signal is received, will return null if onComplete, T if onNext, throw a
-	 * {@literal Exceptions.DownstreamException} if checked error or origin RuntimeException if unchecked.
-	 * If the default timeout {@literal 30 seconds} has elapsed,a {@link RuntimeException}  will be thrown.
-	 *
-	 * Note that each block() will subscribe a new single (MonoSink) subscriber, in other words, the result might
+	 * Subscribe to this {@link Mono} and <strong>block</strong> until a next signal is
+	 * received or a timeout expires. Returns that value, or null if the Mono completes
+	 * empty. In case the Mono errors, the original exception is thrown (wrapped in a
+	 * {@link RuntimeException} if it was a checked exception).
+	 * If the provided timeout expires,a {@link RuntimeException} is thrown.
+	 * <p>
+	 * Note that each block() will subscribe a new single subscriber: in other words, the result might
 	 * miss signal from hot publishers.
 	 *
 	 * <p>
@@ -1327,16 +1352,17 @@ public abstract class Mono<T> implements Publisher<T> {
 	/**
 	 * Defer the given transformation to this {@link Mono} in order to generate a
 	 * target {@link Mono} type. A transformation will occur for each
-	 * {@link Subscriber}.
+	 * {@link Subscriber}. For instance:
 	 *
 	 * {@code flux.compose(Mono::from).subscribe() }
 	 *
-	 * @param transformer the {@link Function} to immediately map this {@link Mono} into a target {@link Mono}
-	 * instance.
+	 * @param transformer the {@link Function} to lazily map this {@link Mono} into a target {@link Mono}
+	 * instance upon subscription.
 	 * @param <V> the item type in the returned {@link Publisher}
 	 *
 	 * @return a new {@link Mono}
-	 * @see #as for a loose conversion to an arbitrary type
+	 * @see #as as() for a loose conversion to an arbitrary type
+	 * @see #transform(Function)
 	 */
 	public final <V> Mono<V> compose(Function<? super Mono<T>, ? extends Publisher<V>> transformer) {
 		return defer(() -> from(transformer.apply(this)));
@@ -1357,7 +1383,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Provide a default unique value if this mono is completed without any data
+	 * Provide a default single value if this mono is completed without any data
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/defaultifempty.png" alt="">
@@ -1380,18 +1406,18 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Delay this {@link Flux} element ({@link Subscriber#onNext} signal) by a given
-	 * duration. Empty monos or error signals are not delayed.
+	 * Delay this {@link Mono} element ({@link Subscriber#onNext} signal) by a given
+	 * duration. Empty Monos or error signals are not delayed.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/delayonnext.png" alt="">
 	 *
 	 * <p>
-	 * Note that the scheduler on which the mono chain continues execution will be the
+	 * Note that the scheduler on which the Mono chain continues execution will be the
 	 * {@link Schedulers#parallel() parallel} scheduler if the mono is valued, or the
 	 * current scheduler if the mono completes empty or errors.
 	 *
-	 * @param delay period to delay each {@link Subscriber#onNext} signal
+	 * @param delay duration by which to delay the {@link Subscriber#onNext} signal
 	 * @return a delayed {@link Mono}
 	 */
 	public final Mono<T> delayElement(Duration delay) {
@@ -1399,18 +1425,18 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Delay this {@link Flux} element ({@link Subscriber#onNext} signal) by a given
-	 * {@link Duration}. Empty monos or error signals are not delayed.
+	 * Delay this {@link Mono} element ({@link Subscriber#onNext} signal) by a given
+	 * {@link Duration}, on a particular {@link Scheduler}. Empty monos or error signals are not delayed.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/delayonnext.png" alt="">
 	 *
 	 * <p>
 	 * Note that the scheduler on which the mono chain continues execution will be the
-	 * time scheduler provided if the mono is valued, or the current scheduler if the mono
+	 * scheduler provided if the mono is valued, or the current scheduler if the mono
 	 * completes empty or errors.
 	 *
-	 * @param delay {@link Duration} to delay each {@link Subscriber#onNext} signal
+	 * @param delay {@link Duration} by which to delay the {@link Subscriber#onNext} signal
 	 * @param timer a time-capable {@link Scheduler} instance to delay the value signal on
 	 * @return a delayed {@link Mono}
 	 */
@@ -1470,9 +1496,10 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * A "phantom-operator" working only if this
-	 * {@link Mono} is a emits onNext, onError or onComplete {@link Signal}. The relative {@link Subscriber}
-	 * callback will be invoked, error {@link Signal} will trigger onError and complete {@link Signal} will trigger
+	 * An operator working only if this {@link Mono} emits onNext, onError or onComplete {@link Signal}
+	 * instances, transforming these {@link #materialize() materialized} signals into
+	 * real signals on the {@link Subscriber}.
+	 * The error {@link Signal} will trigger onError and complete {@link Signal} will trigger
 	 * onComplete.
 	 *
 	 * <p>
@@ -1480,6 +1507,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	 * @param <X> the dematerialized type
 	 *
 	 * @return a dematerialized {@link Mono}
+	 * @see #materialize()
 	 */
 	public final <X> Mono<X> dematerialize() {
 		@SuppressWarnings("unchecked")
@@ -1488,7 +1516,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Triggered after the {@link Mono} terminates, either by completing downstream successfully or with an error.
+	 * Add behavior triggered after the {@link Mono} terminates, either by completing downstream successfully or with an error.
 	 * The arguments will be null depending on success, success with data and error:
 	 * <ul>
 	 *     <li>null, null : completed without data</li>
@@ -1508,7 +1536,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Triggering <strong>after</strong>the {@link Mono} terminates for any reason,
+	 * Add behavior triggering <strong>after</strong> the {@link Mono} terminates for any reason,
 	 * including cancellation. The terminating event ({@link SignalType#ON_COMPLETE},
 	 * {@link SignalType#ON_ERROR} and {@link SignalType#CANCEL}) is passed to the consumer,
 	 * which is executed after the signal has been passed downstream.
@@ -1532,7 +1560,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Triggered when the {@link Mono} is cancelled.
+	 * Add behavior triggered when the {@link Mono} is cancelled.
 	 *
 	 *
 	 * <p>
@@ -1549,7 +1577,7 @@ public abstract class Mono<T> implements Publisher<T> {
 
 
 	/**
-	 * Triggered when the {@link Mono} emits a data successfully.
+	 * Add behavior triggered when the {@link Mono} emits a data successfully.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/doonnext.png" alt="">
@@ -1564,7 +1592,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Triggered when the {@link Mono} completes successfully.
+	 * Add behavior triggered when the {@link Mono} completes successfully.
 	 *
 	 * <ul>
 	 *     <li>null : completed without data</li>
@@ -1586,7 +1614,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Triggers side-effects when the {@link Mono} emits an item, fails with an error
+	 * Add behavior triggered when the {@link Mono} emits an item, fails with an error
 	 * or completes successfully. All these events are represented as a {@link Signal}
 	 * that is passed to the side-effect callback. Note that this is an advanced operator,
 	 * typically used for monitoring of a Mono.
@@ -1611,7 +1639,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Triggered when the {@link Mono} completes with an error.
+	 * Add behavior triggered when the {@link Mono} completes with an error.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/doonerror1.png" alt="">
@@ -1627,12 +1655,12 @@ public abstract class Mono<T> implements Publisher<T> {
 
 
 	/**
-	 * Triggered when the {@link Mono} completes with an error matching the given exception type.
+	 * Add behavior triggered when the {@link Mono} completes with an error matching the given exception type.
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/doonerrorw.png" alt="">
 	 *
 	 * @param exceptionType the type of exceptions to handle
-	 * @param onError the error handler for each error
+	 * @param onError the error handler for relevant errors
 	 * @param <E> type of the error to handle
 	 *
 	 * @return an observed  {@link Mono}
@@ -1647,12 +1675,12 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Triggered when the {@link Mono} completes with an error matching the given exception.
+	 * Add behavior triggered when the {@link Mono} completes with an error matching the given predicate.
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/doonerrorw.png" alt="">
 	 *
 	 * @param predicate the matcher for exceptions to handle
-	 * @param onError the error handler for each error
+	 * @param onError the error handler for relevant error
 	 *
 	 * @return an observed  {@link Mono}
 	 *
@@ -1667,7 +1695,7 @@ public abstract class Mono<T> implements Publisher<T> {
 		});
 	}
 	/**
-	 * Attach a {@link LongConsumer} to this {@link Mono} that will observe any request to this {@link Mono}.
+	 * Add behavior triggering a {@link LongConsumer} when the {@link Mono} receives any request.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/doonrequest1.png" alt="">
@@ -1682,7 +1710,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Triggered when the {@link Mono} is subscribed.
+	 * Add behavior triggered when the {@link Mono} is subscribed.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/doonsubscribe.png" alt="">
@@ -1697,7 +1725,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Triggered when the {@link Mono} terminates, either by completing successfully or with an error.
+	 * Add behavior triggered when the {@link Mono} terminates, either by completing successfully or with an error.
 	 *
 	 * <ul>
 	 *     <li>null, null : completing without data</li>
@@ -1720,7 +1748,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	/**
 	 * Map this {@link Mono} sequence into {@link reactor.util.function.Tuple2} of T1 {@link Long} timemillis and T2
 	 * {@code T} associated data. The timemillis corresponds to the elapsed time between the subscribe and the first
-	 * next signal.
+	 * next signal, according to the {@link Schedulers#parallel() parallel} scheduler.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/elapsed1.png" alt="">
@@ -1734,7 +1762,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	/**
 	 * Map this {@link Mono} sequence into {@link reactor.util.function.Tuple2} of T1 {@link Long} timemillis and T2
 	 * {@code T} associated data. The timemillis corresponds to the elapsed time between the subscribe and the first
-	 * next signal.
+	 * next signal, according to the provided {@link Scheduler}.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/elapsed1.png" alt="">
@@ -1748,7 +1776,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Test the result if any of this {@link Mono} and replay it if predicate returns true.
+	 * If this {@link Mono} is valued, test the result and replay it if predicate returns true.
 	 * Otherwise complete without value.
 	 *
 	 * <p>
@@ -1783,8 +1811,8 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Transform the item emitted by this {@link Mono} into another {@link Mono}
-	 * possibly with another value type.
+	 * Transform the item emitted by this {@link Mono} asynchronously, returning the
+	 * value emitted by another {@link Mono} (possibly changing the value type).
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/then.png" alt="">
@@ -1792,7 +1820,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	 * @param transformer the function to dynamically bind a new {@link Mono}
 	 * @param <R> the result type bound
 	 *
-	 * @return a new {@link Mono} containing the merged values
+	 * @return a new {@link Mono} with an asynchronously mapped value.
 	 */
 	public final <R> Mono<R> flatMap(Function<? super T, ? extends Mono<? extends R>>
 			transformer) {
@@ -1817,8 +1845,8 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Transform the signals emitted by this {@link Mono} into a Publisher, then forward
-	 * its emissions into the returned {@link Flux}.
+	 * Transform the signals emitted by this {@link Mono} into signal-specific Publishers,
+	 * then forward the applicable Publisher's emissions into the returned {@link Flux}.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/flatmaps1.png" alt="">
@@ -1847,10 +1875,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Transform the item emitted by this {@link Mono} into {@link Iterable}, , then forward
+	 * Transform the item emitted by this {@link Mono} into {@link Iterable}, then forward
 	 * its elements into the returned {@link Flux}. The prefetch argument allows to
-	 * give an
-	 * arbitrary prefetch size to the inner {@link Iterable}.
+	 * give an arbitrary prefetch size to the inner {@link Iterable}.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/flatmap.png" alt="">
@@ -1865,7 +1892,6 @@ public abstract class Mono<T> implements Publisher<T> {
 		return Flux.onAssembly(new FluxFlattenIterable<>(this, mapper, Integer
 				.MAX_VALUE, QueueSupplier.one()));
 	}
-
 
 	/**
 	 * Convert this {@link Mono} to a {@link Flux}
@@ -2041,12 +2067,12 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Transform the item emitted by this {@link Mono} by applying a function to item emitted.
+	 * Transform the item emitted by this {@link Mono} by synchronously applying a function to it.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/map1.png" alt="">
 	 * <p>
-	 * @param mapper the transforming function
+	 * @param mapper the synchronous transforming function
 	 * @param <R> the transformed type
 	 *
 	 * @return a new {@link Mono}
@@ -2059,7 +2085,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Transform the error emitted by this {@link Mono} by applying a function.
+	 * Transform any error emitted by this {@link Mono} by synchronously applying a function to it.
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/maperror.png" alt="">
 	 * <p>
@@ -2072,8 +2098,8 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Transform the error emitted by this {@link Mono} by applying a function if the
-	 * error matches the given type, otherwise let the error flow.
+	 * Transform an error emitted by this {@link Mono} by synchronously applying a function
+	 * to it if the error matches the given type. Otherwise let the error pass through.
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/maperror.png" alt="">
 	 * <p>
@@ -2091,9 +2117,8 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Transform the error emitted by this {@link Mono} by applying a function if the
-	 * error matches the given predicate, otherwise let the error flow.
-	 * <p>
+	 * Transform an error emitted by this {@link Mono} by synchronously applying a function
+	 * to it if the error matches the given predicate. Otherwise let the error pass through.
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/maperror.png"
 	 * alt="">
@@ -2109,7 +2134,8 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Transform the incoming onNext, onError and onComplete signals into {@link Signal}.
+	 * Transform incoming onNext, onError and onComplete signals into {@link Signal} instances,
+	 * materializing these signals.
 	 * Since the error is materialized as a {@code Signal}, the propagation will be stopped and onComplete will be
 	 * emitted. Complete signal will first emit a {@code Signal.complete()} and then effectively complete the flux.
 	 *
@@ -2117,6 +2143,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/materialize1.png" alt="">
 	 *
 	 * @return a {@link Mono} of materialized {@link Signal}
+	 * @see #dematerialize()
 	 */
 	public final Mono<Signal<T>> materialize() {
 		return onAssembly(new MonoMaterialize<>(this));
@@ -2129,7 +2156,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/merge1.png" alt="">
 	 * <p>
-	 * @param other the other {@link Publisher} to merge with
+	 * @param other the {@link Publisher} to merge with
 	 *
 	 * @return a new {@link Flux} as the sequence is not guaranteed to be at most 1
 	 */
@@ -2138,7 +2165,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Emit the any of the result from this mono or from the given mono
+	 * Emit the first available result from this mono or the other mono.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/or.png" alt="">
@@ -2160,10 +2187,9 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Evaluate the accepted value against the given {@link Class} type. If the
-	 * predicate test succeeds, the value is
-	 * passed into the new {@link Mono}. If the predicate test fails, the value is
-	 * ignored.
+	 * Evaluate the emitted value against the given {@link Class} type. If the
+	 * predicate test succeeds, the value is passed into the new {@link Mono}.
+	 * If the predicate test fails, the value is ignored.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/filter.png" alt="">
@@ -2178,14 +2204,15 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Subscribe to a returned fallback publisher when any error occurs.
+	 * Subscribe to a fallback publisher when any error occurs, using a function to
+	 * choose the fallback depending on the error.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/otherwise.png" alt="">
 	 * <p>
-	 * @param fallback the function to map an alternative {@link Mono}
+	 * @param fallback the function to choose the fallback to an alternative {@link Mono}
 	 *
-	 * @return an alternating {@link Mono} on source onError
+	 * @return a {@link Mono} falling back upon source onError
 	 *
 	 * @deprecated Use {@link #switchOnError(Function)}} instead. Will be removed between 3.1.0.M2 and 3.1.0.RELEASE.
 	 */
@@ -2196,18 +2223,17 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Subscribe to a returned fallback publisher when an error matching the given type
-	 * occurs.
+	 * Subscribe to a fallback publisher when an error matching the given type
+	 * occurs, using a function to choose the fallback depending on the error.
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/otherwise.png"
 	 * alt="">
 	 *
 	 * @param type the error type to match
-	 * @param fallback the {@link Function} mapping the error to a new {@link Mono}
-	 * sequence
+	 * @param fallback the function to choose the fallback to an alternative {@link Mono}
 	 * @param <E> the error type
 	 *
-	 * @return a new {@link Mono}
+	 * @return a {@link Mono} falling back upon source onError
 	 * @deprecated Use {@link #switchOnError(Class, Function)} instead. Will be removed between 3.1.0.M2 and 3.1.0.RELEASE.
 	 */
 	@Deprecated
@@ -2217,17 +2243,15 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Subscribe to a returned fallback publisher when an error matching the given type
+	 * Subscribe to a fallback publisher when an error matching a given predicate
 	 * occurs.
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/otherwise.png"
 	 * alt="">
 	 *
 	 * @param predicate the error predicate to match
-	 * @param fallback the {@link Function} mapping the error to a new {@link Mono}
-	 * sequence
-	 *
-	 * @return a new {@link Mono}
+	 * @param fallback the function to choose the fallback to an alternative {@link Mono}
+	 * @return a {@link Mono} falling back upon source onError
 	 * @deprecated Use {@link #switchOnError(Predicate, Function)} instead. Will be removed between 3.1.0.M2 and 3.1.0.RELEASE.
 	 */
 	@Deprecated
@@ -2237,14 +2261,14 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Provide an alternative {@link Mono} if this mono is completed without data
+	 * Fallback to an alternative {@link Mono} if this mono is completed without data
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/otherwiseempty.png" alt="">
 	 * <p>
 	 * @param alternate the alternate mono if this mono is empty
 	 *
-	 * @return an alternating {@link Mono} on source onComplete without elements
+	 * @return a {@link Mono} falling back upon source completing without elements
 	 * @deprecated Use {@link #switchIfEmpty} instead. Will be removed between 3.1.0.M2 and 3.1.0.RELEASE.
 	 */
 	@Deprecated
@@ -2253,7 +2277,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Subscribe to a returned fallback value when any error occurs.
+	 * Fallback to emitting a default value when any error occurs.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/otherwisereturn.png" alt="">
@@ -2269,12 +2293,12 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Fallback to the given value if an error of a given type is observed on this
+	 * Fallback to emitting a default value if an error of a specific type is observed on this
 	 * {@link Mono}
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/otherwisereturn.png" alt="">
 	 * @param type the error type to match
-	 * @param fallbackValue alternate value on fallback
+	 * @param fallbackValue the value to emit if an error occurs that matches the type
 	 * @param <E> the error type
 	 *
 	 * @return a new {@link Mono}
@@ -2285,13 +2309,12 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Fallback to the given value if an error matching the given predicate is
-	 * observed on this
-	 * {@link Mono}
+	 * Fallback to emitting a default value if an error matching the given predicate is
+	 * observed on this {@link Mono}
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/otherwisereturn.png" alt="">
 	 * @param predicate the error predicate to match
-	 * @param fallbackValue alternate value on fallback
+	 * @param fallbackValue the value to emit if an error occurs that matches the predicate
 	 * @param <E> the error type
 	 *
 	 * @return a new {@link Mono}
@@ -2302,7 +2325,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Detaches the both the child {@link Subscriber} and the {@link Subscription} on
+	 * Detaches both the child {@link Subscriber} and the {@link Subscription} on
 	 * termination or cancellation.
 	 * <p>This should help with odd retention scenarios when running
 	 * with non-reactor {@link Subscriber}.
@@ -2314,7 +2337,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Shares a {@link Mono} for the duration of a function that may transform it and
+	 * Share a {@link Mono} for the duration of a function that may transform it and
 	 * consume it as many times as necessary without causing multiple subscriptions
 	 * to the upstream.
 	 *
@@ -2360,12 +2383,13 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Repeatedly subscribe to the source completion of the previous subscription.
+	 * Repeatedly and indefinitely subscribe to the source upon completion of the
+	 * previous subscription.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/repeat.png" alt="">
 	 *
-	 * @return an indefinitively repeated {@link Flux} on onComplete
+	 * @return an indefinitely repeated {@link Flux} on onComplete
 	 */
 	public final Flux<T> repeat() {
 		return repeat(Flux.ALWAYS_BOOLEAN_SUPPLIER);
@@ -2379,7 +2403,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	 *
 	 * @param predicate the boolean to evaluate on onComplete.
 	 *
-	 * @return an eventually repeated {@link Flux} on onComplete
+	 * @return a {@link Flux} that repeats on onComplete while the predicate matches
 	 *
 	 */
 	public final Flux<T> repeat(BooleanSupplier predicate) {
@@ -2387,14 +2411,14 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Repeatedly subscribe to the source if the predicate returns true after completion of the previous subscription.
+	 * Repeatedly subscribe to the source n times.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/repeatn.png" alt="">
 	 *
 	 * @param numRepeat the number of times to re-subscribe on onComplete
 	 *
-	 * @return an eventually repeated {@link Flux} on onComplete up to number of repeat specified
+	 * @return a {@link Flux} that repeats on onComplete, up to the specified number of repetitions
 	 *
 	 */
 	public final Flux<T> repeat(long numRepeat) {
@@ -2411,46 +2435,43 @@ public abstract class Mono<T> implements Publisher<T> {
 	 * @param numRepeat the number of times to re-subscribe on complete
 	 * @param predicate the boolean to evaluate on onComplete
 	 *
-	 * @return an eventually repeated {@link Flux} on onComplete up to number of repeat specified OR matching
-	 * predicate
-	 *
+	 * @return a {@link Flux} that repeats on onComplete while the predicate matches,
+	 * up to the specified number of repetitions
 	 */
 	public final Flux<T> repeat(long numRepeat, BooleanSupplier predicate) {
 		return Flux.defer(() -> repeat(Flux.countingBooleanSupplier(predicate, numRepeat)));
 	}
 
 	/**
-	 * Repeatedly subscribe to this {@link Mono} when a companion sequence signals a number of emitted elements in
-	 * response to the flux completion signal.
+	 * Repeatedly subscribe to this {@link Mono} when a companion sequence emits elements in
+	 * response to the flux completion signal. Any terminal signal from the companion
+	 * sequence will terminate the resulting {@link Flux} with the same signal immediately.
 	 * <p>If the companion sequence signals when this {@link Mono} is active, the repeat
-	 * attempt is suppressed and any terminal signal will terminate this {@link Flux} with
-	 * the same signal immediately.
+	 * attempt is suppressed.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/repeatwhen.png" alt="">
 	 *
-	 * @param whenFactory the {@link Function} providing a {@link Flux} signalling an exclusive number of
-	 * emitted elements on onComplete and returning a {@link Publisher} companion.
+	 * @param repeatFactory the {@link Function} that returns the associated {@link Publisher}
+	 * companion, given a {@link Flux} that signals each onComplete as a 0-based incrementing {@link Long}.
 	 *
-	 * @return an eventually repeated {@link Flux} on onComplete when the companion {@link Publisher} produces an
+	 * @return a {@link Flux} that repeats on onComplete when the companion {@link Publisher} produces an
 	 * onNext signal
-	 *
 	 */
-	public final Flux<T> repeatWhen(Function<Flux<Long>, ? extends Publisher<?>> whenFactory) {
-		return Flux.onAssembly(new FluxRepeatWhen<>(this, whenFactory));
+	public final Flux<T> repeatWhen(Function<Flux<Long>, ? extends Publisher<?>> repeatFactory) {
+		return Flux.onAssembly(new FluxRepeatWhen<>(this, repeatFactory));
 	}
 
 	/**
-	 * Repeatedly subscribe to this {@link Mono} until there is an onNext signal when a companion sequence signals a
-	 * number of emitted elements.
+	 * Repeatedly subscribe to this {@link Mono} until a companion sequence emits an element.
 	 * <p>If the companion sequence signals when this {@link Mono} is active, the repeat
 	 * attempt is suppressed and any terminal signal will terminate this {@link Mono} with the same signal immediately.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/repeatwhenempty.png" alt="">
 	 *
-	 * @param repeatFactory the
-	 * {@link Function} providing a {@link Flux} signalling the current number of repeat on onComplete and returning a {@link Publisher} companion.
+	 * @param repeatFactory the {@link Function} that returns the associated {@link Publisher}
+	 * companion, given a {@link Flux} that signals each onComplete as a 0-based incrementing {@link Long}.
 	 *
 	 * @return an eventually repeated {@link Mono} on onComplete when the companion {@link Publisher} produces an
 	 * onNext signal
@@ -2459,7 +2480,6 @@ public abstract class Mono<T> implements Publisher<T> {
 	public final Mono<T> repeatWhenEmpty(Function<Flux<Long>, ? extends Publisher<?>> repeatFactory) {
 		return repeatWhenEmpty(Integer.MAX_VALUE, repeatFactory);
 	}
-
 
 	/**
 	 * Repeatedly subscribe to this {@link Mono} until there is an onNext signal when a companion sequence signals a
@@ -2472,12 +2492,12 @@ public abstract class Mono<T> implements Publisher<T> {
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/repeatwhen1.png" alt="">
 	 *
 	 * @param maxRepeat the maximum repeat number of time (infinite if {@code Integer.MAX_VALUE})
-	 * @param repeatFactory the
-	 * {@link Function} providing a {@link Flux} signalling the current repeat index from 0 on onComplete and returning a {@link Publisher} companion.
+	 * @param repeatFactory the {@link Function} that returns the associated {@link Publisher}
+	 * companion, given a {@link Flux} that signals each onComplete as a 0-based incrementing {@link Long}.
 	 *
 	 * @return an eventually repeated {@link Mono} on onComplete when the companion {@link Publisher} produces an
 	 * onNext signal
-	 *
+	 * //FIXME
 	 */
 	public final Mono<T> repeatWhenEmpty(int maxRepeat, Function<Flux<Long>, ? extends Publisher<?>> repeatFactory) {
 		return Mono.defer(() -> {
@@ -2501,10 +2521,7 @@ public abstract class Mono<T> implements Publisher<T> {
 
 
 	/**
-	 * Re-subscribes to this {@link Mono} sequence if it signals any error
-	 * either indefinitely.
-	 * <p>
-	 * The times == Long.MAX_VALUE is treated as infinite retry.
+	 * Re-subscribes to this {@link Mono} sequence if it signals any error, indefinitely.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/retry1.png" alt="">
@@ -2535,7 +2552,7 @@ public abstract class Mono<T> implements Publisher<T> {
 
 	/**
 	 * Re-subscribes to this {@link Mono} sequence if it signals any error
-	 * and the given {@link Predicate} matches otherwise push the error downstream.
+	 * that match the given {@link Predicate}, otherwise push the error downstream.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/retryb1.png" alt="">
@@ -2550,7 +2567,7 @@ public abstract class Mono<T> implements Publisher<T> {
 
 	/**
 	 * Re-subscribes to this {@link Mono} sequence up to the specified number of retries if it signals any
-	 * error and the given {@link Predicate} matches otherwise push the error downstream.
+	 * error that match the given {@link Predicate}, otherwise push the error downstream.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/retrynb1.png" alt="">
@@ -2576,7 +2593,8 @@ public abstract class Mono<T> implements Publisher<T> {
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/retrywhen1.png" alt="">
 	 *
-	 * @param whenFactory the {@link Function} providing a {@link Flux} signalling any error from the source sequence and returning a {@link Publisher} companion.
+	 * @param whenFactory the {@link Function} that returns the associated {@link Publisher}
+	 * companion, given a {@link Flux} that signals each onError as a 0-based incrementing {@link Long}.
 	 *
 	 * @return a re-subscribing {@link Mono} on onError when the companion {@link Publisher} produces an
 	 * onNext signal
@@ -2720,7 +2738,7 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Subscribe the {@link Mono} with the givne {@link Subscriber} and return it.
+	 * Subscribe the given {@link Subscriber} to this {@link Mono} and return said {@link Subscriber}.
 	 *
 	 * @param subscriber the {@link Subscriber} to subscribe
 	 * @param <E> the reified type of the {@link Subscriber} for chaining
@@ -2815,14 +2833,16 @@ $	 * Subscribe to a returned fallback publisher when an error matching the given
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/ignorethen.png" alt="">
 	 * <p>
-	 * @return a {@link Mono} igoring its payload (actively dropping)
+	 * @return a {@link Mono} ignoring its payload (actively dropping)
 	 */
 	public final Mono<Void> then() {
 		return empty(this);
 	}
 
 	/**
-	 * Ignore element from this {@link Mono} and transform its completion signal into the
+	 * Let this {@link Mono} complete then play another Mono.
+	 * <p>
+	 * In other words ignore element from this {@link Mono} and transform its completion signal into the
 	 * emission and completion signal of a provided {@code Mono<V>}. Error signal is
 	 * replayed in the resulting {@code Mono<V>}.
 	 *
@@ -2843,7 +2863,9 @@ $	 * Subscribe to a returned fallback publisher when an error matching the given
 	}
 
 	/**
-	 * Ignore element from this {@link Mono} and transform its completion signal into the
+	 * Let this {@link Mono} complete then play another lazily supplied Mono.
+	 * <p>
+	 * In other words ignore element from this {@link Mono} and transform its completion signal into the
 	 * emission and completion signal of a supplied {@code Mono<V>}. Error signal is
 	 * replayed in the resulting {@code Mono<V>}.
 	 *
@@ -2878,7 +2900,9 @@ $	 * Subscribe to a returned fallback publisher when an error matching the given
 	}
 
 	/**
-	 * Ignore element from this mono and transform the completion signal into a
+	 * Let this {@link Mono} complete then play another {@link Publisher}.
+	 * <p>
+	 * In other words ignore element from this mono and transform the completion signal into a
 	 * {@code Flux<V>} that will emit elements from the provided {@link Publisher}.
 	 *
 	 * <p>
@@ -2897,7 +2921,9 @@ $	 * Subscribe to a returned fallback publisher when an error matching the given
 	}
 
 	/**
-	 * Ignore element from this mono and transform the completion signal into a
+	 * Let this {@link Mono} complete then play another lazily supplied {@link Publisher}.
+	 * <p>
+	 * In other words ignore element from this mono and transform the completion signal into a
 	 * {@code Flux<V>} that will emit elements from the supplier-provided {@link Publisher}.
 	 *
 	 * <p>
@@ -2930,7 +2956,7 @@ $	 * Subscribe to a returned fallback publisher when an error matching the given
 	/**
 	 * Switch to a fallback {@link Mono} in case an item doesn't arrive before the given period.
 	 *
-	 * <p> If the given {@link Publisher} is null, signal a {@link java.util.concurrent.TimeoutException}.
+	 * <p> If the given {@link Mono} is null, signal a {@link java.util.concurrent.TimeoutException}.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/timeouttimefallback1.png" alt="">
@@ -2945,13 +2971,14 @@ $	 * Subscribe to a returned fallback publisher when an error matching the given
 	}
 
 	/**
-	 * Signal a {@link java.util.concurrent.TimeoutException} error in case an item doesn't arrive before the given period.
+	 * Signal a {@link java.util.concurrent.TimeoutException} error in case an item doesn't arrive before the given period,
+	 * as measured on the provided {@link Scheduler}.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/timeouttime1.png" alt="">
 	 *
 	 * @param timeout the timeout before the onNext signal from this {@link Mono}
-	 * @param timer a time-capable {@link Scheduler} instance to run on
+	 * @param timer a time-capable {@link Scheduler} instance to run the delay on
 	 *
 	 * @return an expirable {@link Mono}
 	 */
@@ -2960,9 +2987,10 @@ $	 * Subscribe to a returned fallback publisher when an error matching the given
 	}
 
 	/**
-	 * Switch to a fallback {@link Mono} in case an item doesn't arrive before the given period.
+	 * Switch to a fallback {@link Mono} in case an item doesn't arrive before the given period,
+	 * as measured on the provided {@link Scheduler}.
 	 *
-	 * <p> If the given {@link Publisher} is null, signal a {@link java.util.concurrent.TimeoutException}.
+	 * <p> If the given {@link Mono} is null, signal a {@link java.util.concurrent.TimeoutException}.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/timeouttimefallback1.png" alt="">
@@ -2993,7 +3021,7 @@ $	 * Subscribe to a returned fallback publisher when an error matching the given
 	 * @param firstTimeout the timeout {@link Publisher} that must not emit before the first signal from this {@link Mono}
 	 * @param <U> the element type of the timeout Publisher
 	 *
-	 * @return an expirable {@link Mono} if the first item does not come before a {@link Publisher} signal
+	 * @return an expirable {@link Mono} if the item does not come before a {@link Publisher} signals
 	 *
 	 */
 	public final <U> Mono<T> timeout(Publisher<U> firstTimeout) {
@@ -3002,8 +3030,7 @@ $	 * Subscribe to a returned fallback publisher when an error matching the given
 
 	/**
 	 * Switch to a fallback {@link Publisher} in case the  item from this {@link Mono} has
-	 * not been emitted before the given {@link Publisher} emits. The following items will be individually timed via
-	 * the factory provided {@link Publisher}.
+	 * not been emitted before the given {@link Publisher} emits.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/timeoutfallbackp1.png" alt="">
@@ -3013,7 +3040,8 @@ $	 * Subscribe to a returned fallback publisher when an error matching the given
 	 * @param fallback the fallback {@link Publisher} to subscribe when a timeout occurs
 	 * @param <U> the element type of the timeout Publisher
 	 *
-	 * @return a first then per-item expirable {@link Mono} with a fallback {@link Publisher}
+	 * @return an expirable {@link Mono} with a fallback {@link Mono} if the item doesn't
+	 * come before a {@link Publisher} signals
 	 *
 	 */
 	public final <U> Mono<T> timeout(Publisher<U> firstTimeout, Mono<? extends T> fallback) {
@@ -3021,8 +3049,9 @@ $	 * Subscribe to a returned fallback publisher when an error matching the given
 	}
 
 	/**
-	 * Emit a {@link reactor.util.function.Tuple2} pair of T1 {@link Long} current system time in
-	 * millis and T2 {@code T} associated data for the eventual item from this {@link Mono}
+	 * If this {@link Mono} is valued, emit a {@link reactor.util.function.Tuple2} pair of
+	 * T1 the current clock time in millis (as a {@link Long} measured by the
+	 * {@link Schedulers#parallel() parallel} Scheduler) and T2 the emitted data (as a {@code T}).
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/timestamp1.png" alt="">
@@ -3034,7 +3063,12 @@ $	 * Subscribe to a returned fallback publisher when an error matching the given
 	}
 
 	/**
-	 * Emit a {@link reactor.util.function.Tuple2} pair of T1 {@link Long} current system time in
+	 * If this {@link Mono} is valued, emit a {@link reactor.util.function.Tuple2} pair of
+	 * T1 the current clock time in millis (as a {@link Long} measured by the
+	 * provided {@link Scheduler}) and T2 the emitted data (as a {@code T}).
+	 *
+	 * Emit a {@lin
+	 * k reactor.util.function.Tuple2} pair of T1 {@link Long} current system time in
 	 * millis and T2 {@code T} associated data for the eventual item from this {@link Mono}
 	 *
 	 * <p>
@@ -3074,8 +3108,8 @@ $	 * Subscribe to a returned fallback publisher when an error matching the given
 	 * @param <V> the item type in the returned {@link Mono}
 	 *
 	 * @return a new {@link Mono}
-	 * @see #compose(Function) for deferred composition of {@link Mono} for each {@link Subscriber}
-	 * @see #as for a loose conversion to an arbitrary type
+	 * @see #compose(Function) compose(Function) for deferred composition of {@link Mono} for each {@link Subscriber}
+	 * @see #as(Function) as(Function) for a loose conversion to an arbitrary type
 	 */
 	public final <V> Mono<V> transform(Function<? super Mono<T>, ? extends Publisher<V>> transformer) {
 		return onAssembly(from(transformer.apply(this)));
