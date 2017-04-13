@@ -2751,15 +2751,15 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Subscribe to a returned fallback publisher when any error occurs.
+	 * Subscribe to a fallback publisher when any error occurs, using a function to
+	 * choose the fallback depending on the error.
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/otherwise.png" alt="">
 	 * <p>
-	 * @param fallback the function to map an alternative {@link Mono}
 	 *
-	 * @return an alternating {@link Mono} on source onError
-	 *
+	 * @param fallback the function to choose the fallback to an alternative {@link Mono}
+	 * @return a {@link Mono} falling back upon source onError
 	 * @see Flux#switchOnError
 	 */
 	public final Mono<T> switchOnError(Function<? super Throwable, ? extends Mono<? extends
@@ -2768,18 +2768,17 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-	 * Subscribe to a returned fallback publisher when an error matching the given type
-	 * occurs.
+	 * Subscribe to a fallback publisher when an error matching the given type
+	 * occurs, using a function to choose the fallback depending on the error.
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/otherwise.png"
 	 * alt="">
 	 *
 	 * @param type the error type to match
-	 * @param fallback the {@link Function} mapping the error to a new {@link Mono}
-	 * sequence
+	 * @param fallback the function to choose the fallback to an alternative {@link Mono}
 	 * @param <E> the error type
 	 *
-	 * @return a new {@link Mono}
+	 * @return a {@link Mono} falling back upon source onError
 	 * @see Flux#switchOnError
 	 */
 	public final <E extends Throwable> Mono<T> switchOnError(Class<E> type,
@@ -2792,17 +2791,15 @@ public abstract class Mono<T> implements Publisher<T> {
 	}
 
 	/**
-$	 * Subscribe to a returned fallback publisher when an error matching the given predicate
+$	 * Subscribe to a fallback publisher when an error matching a given predicate
 	 * occurs.
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/otherwise.png"
 	 * alt="">
 	 *
 	 * @param predicate the error predicate to match
-	 * @param fallback the {@link Function} mapping the error to a new {@link Mono}
-	 * sequence
-	 *
-	 * @return a new {@link Mono}
+	 * @param fallback the function to choose the fallback to an alternative {@link Mono}
+	 * @return a {@link Mono} falling back upon source onError
 	 * @see Flux#switchOnError
 	 */
 	public final Mono<T> switchOnError(Predicate<? super Throwable> predicate,
@@ -2812,14 +2809,14 @@ $	 * Subscribe to a returned fallback publisher when an error matching the given
 	}
 
 	/**
-	 * Provide an alternative {@link Mono} if this mono is completed without data
+	 * Fallback to an alternative {@link Mono} if this mono is completed without data
 	 *
 	 * <p>
 	 * <img class="marble" src="https://raw.githubusercontent.com/reactor/reactor-core/v3.0.6.RELEASE/src/docs/marble/otherwiseempty.png" alt="">
 	 * <p>
 	 * @param alternate the alternate mono if this mono is empty
 	 *
-	 * @return an alternating {@link Mono} on source onComplete without elements
+	 * @return a {@link Mono} falling back upon source completing without elements
 	 * @see Flux#switchIfEmpty
 	 */
 	public final Mono<T> switchIfEmpty(Mono<? extends T> alternate) {
